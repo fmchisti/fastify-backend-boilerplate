@@ -1,0 +1,13 @@
+---
+description: TypeScript and Fastify patterns for this backend
+globs: src/**/*.ts
+alwaysApply: false
+---
+
+# TypeScript & Fastify
+
+- Use Zod for all request/response validation; attach schemas to routes with `fastify-type-provider-zod`.
+- Handlers: thin layer – call service, then `reply.send()`. Put logic in `service.ts`.
+- Use `FastifyError` with `statusCode` when throwing so the global error handler returns correct status.
+- Type protected handlers with `AuthenticatedRequest` from `src/middleware/auth.ts` when using `authenticate` or `optionalAuth`.
+- Prefer Drizzle in services; schema lives only in `src/db/schema.ts`.

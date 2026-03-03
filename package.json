@@ -1,0 +1,46 @@
+{
+  "name": "fastify-backend-boilerplate",
+  "version": "1.0.0",
+  "description": "Fastify + TypeScript backend boilerplate with Drizzle, Zod, Swagger, and Supabase",
+  "main": "dist/index.js",
+  "scripts": {
+    "deploy": "railway up",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "type-check": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
+  },
+  "keywords": [
+    "fastify",
+    "typescript",
+    "api"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@fastify/cors": "^11.2.0",
+    "@fastify/swagger": "^9.6.1",
+    "@fastify/swagger-ui": "^5.2.4",
+    "@supabase/supabase-js": "^2.39.3",
+    "dotenv": "^16.6.1",
+    "drizzle-orm": "^0.45.1",
+    "fastify": "^5.7.2",
+    "fastify-type-provider-zod": "^6.1.0",
+    "pg": "^8.16.3",
+    "pino": "^8.17.2",
+    "postgres": "^3.4.3",
+    "zod": "^4.3.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.28",
+    "@types/pg": "^8.16.0",
+    "drizzle-kit": "^0.31.8",
+    "pino-pretty": "^10.3.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.3.3"
+  }
+}
