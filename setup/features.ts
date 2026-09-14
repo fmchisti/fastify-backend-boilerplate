@@ -29,6 +29,11 @@ export interface OptionManifest {
   /** Printed after setup. */
   nextSteps?: string[];
   /**
+   * Dependencies with install scripts: `true` runs the script, `false` skips it. pnpm (10.28+)
+   * reads these from `allowBuilds` in pnpm-workspace.yaml and pnpm 11 fails on unlisted ones.
+   */
+  allowBuilds?: Record<string, boolean>;
+  /**
    * Other features this option depends on: `{ orm: ["drizzle", "prisma"] }` means the option
    * can only be selected together with one of those ORMs. Setup hides incompatible options.
    */
@@ -121,6 +126,8 @@ export const features = {
         hint: "verifies Firebase ID tokens",
         paths: ["src/auth/providers/firebase", "test/providers/firebase.test.ts"],
         dependencies: ["firebase-admin"],
+        // Optional native speedups; firebase-admin works without them
+        allowBuilds: { "@firebase/util": false, protobufjs: false },
         env: [
           { key: "FIREBASE_PROJECT_ID", example: "your-project-id" },
           {
@@ -198,6 +205,8 @@ export const features = {
         ],
         // prisma CLI is a runtime dependency so `migrate deploy` works in production images
         dependencies: ["@prisma/client", "@prisma/adapter-pg", "prisma"],
+        // Downloads the schema engine used by prisma migrate
+        allowBuilds: { prisma: true, "@prisma/engines": true },
         env: databaseEnv,
         scripts: {
           postinstall: "prisma generate",
@@ -367,6 +376,9 @@ export const CONDITIONAL: ConditionalManifest[] = [
     scripts: ["db:up", "db:down"],
   },
 ];
+
+/** Install scripts for dependencies every project has. esbuild ships prebuilt binaries. */
+export const CORE_ALLOW_BUILDS: Record<string, boolean> = { esbuild: false };
 
 export const CORE_ENV: EnvEntry[] = [
   { key: "NODE_ENV", example: "development" },

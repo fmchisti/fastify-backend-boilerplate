@@ -4,6 +4,7 @@ import path from "node:path";
 import { glob } from "tinyglobby";
 import {
   CONDITIONAL,
+  CORE_ALLOW_BUILDS,
   CORE_ENV,
   type ConditionalManifest,
   type EnvEntry,
@@ -361,6 +362,32 @@ export const renderEnvExample = (
   return `${sections.join("\n\n")}\n`;
 };
 
+/** `allowBuilds` for the selected options (every option when `selection` is omitted). */
+export const allowBuildsFor = (
+  selection?: Record<string, string>,
+  manifest: Features = features,
+): Record<string, boolean> => {
+  const options = Object.entries(manifest).flatMap(([feature, entry]) =>
+    selection === undefined
+      ? Object.values(entry.options)
+      : [entry.options[selection[feature] ?? ""]].filter((option) => option !== undefined),
+  );
+  const merged: Record<string, boolean> = { ...CORE_ALLOW_BUILDS };
+  for (const option of options) Object.assign(merged, option.allowBuilds);
+  return Object.fromEntries(Object.entries(merged).sort(([a], [b]) => a.localeCompare(b)));
+};
+
+const yamlKey = (name: string) => (/^[a-z0-9][\w.-]*$/i.test(name) ? name : `"${name}"`);
+
+/** pnpm-workspace.yaml of a standalone project: which dependencies may run install scripts. */
+export const renderWorkspaceYaml = (allowBuilds: Record<string, boolean>): string =>
+  [
+    "# Dependencies allowed to run install scripts (true) or skipped (false). Needs pnpm 10.28+.",
+    "allowBuilds:",
+    ...Object.entries(allowBuilds).map(([name, allowed]) => `  ${yamlKey(name)}: ${allowed}`),
+    "",
+  ].join("\n");
+
 // ---------------------------------------------------------------------------
 // Apply to a directory
 // ---------------------------------------------------------------------------
@@ -417,6 +444,10 @@ export const applySelection = async (
   const pkg = JSON.parse(await readFile(pkgPath, "utf8")) as PackageJson;
   await writeFile(pkgPath, `${JSON.stringify(updatePackageJson(pkg, selection, options), null, 2)}\n`);
   await writeFile(path.join(root, ".env.example"), renderEnvExample(selection));
+  // Missing when the project lives in a monorepo: the workspace root owns pnpm settings
+  const workspacePath = path.join(root, "pnpm-workspace.yaml");
+  if (existsSync(workspacePath))
+    await writeFile(workspacePath, renderWorkspaceYaml(allowBuildsFor(selection)));
 
   // Without a database there are no migrations to run before deploy
   const railwayPath = path.join(root, "railway.json");

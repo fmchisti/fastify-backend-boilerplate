@@ -1,7 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { FEATURE_IDS, type FeatureId, features, type OptionManifest } from "./features.ts";
+import { CORE_ALLOW_BUILDS, FEATURE_IDS, type FeatureId, features, type OptionManifest } from "./features.ts";
 
 /**
  * The questions setup asks, as plain JSON. `create-fastra` reads `setup/choices.json` right after
@@ -10,11 +10,19 @@ import { FEATURE_IDS, type FeatureId, features, type OptionManifest } from "./fe
  */
 export interface Choices {
   version: 1;
+  /** Install-script approvals every project needs (options add their own). */
+  allowBuilds: Record<string, boolean>;
   features: {
     id: string;
     label: string;
     default: string;
-    options: { value: string; label: string; hint?: string; requires?: Record<string, string[]> }[];
+    options: {
+      value: string;
+      label: string;
+      hint?: string;
+      requires?: Record<string, string[]>;
+      allowBuilds?: Record<string, boolean>;
+    }[];
   }[];
 }
 
@@ -22,6 +30,7 @@ export const CHOICES_FILE = "setup/choices.json";
 
 export const buildChoices = (): Choices => ({
   version: 1,
+  allowBuilds: CORE_ALLOW_BUILDS,
   features: FEATURE_IDS.map((id: FeatureId) => {
     const options: Record<string, OptionManifest> = features[id].options;
     return {
@@ -33,6 +42,7 @@ export const buildChoices = (): Choices => ({
         label: option.label,
         ...(option.hint && { hint: option.hint }),
         ...(option.requires && { requires: option.requires }),
+        ...(option.allowBuilds && { allowBuilds: option.allowBuilds }),
       })),
     };
   }),
