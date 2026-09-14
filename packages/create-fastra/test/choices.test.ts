@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  allowBuildsFor,
   allowedOptions,
   type Choices,
   parseSetupFlags,
@@ -14,13 +15,14 @@ import {
 
 const choices: Choices = {
   version: 1,
+  allowBuilds: { esbuild: false },
   features: [
     {
       id: "auth",
       label: "Auth",
       default: "custom",
       options: [
-        { value: "custom", label: "Custom", requires: { orm: ["drizzle"] } },
+        { value: "custom", label: "Custom", requires: { orm: ["drizzle"] }, allowBuilds: { argon2: true } },
         { value: "none", label: "None" },
       ],
     },
@@ -105,6 +107,19 @@ describe("parseSetupFlags", () => {
   });
 });
 
+describe("allowBuildsFor", () => {
+  it("combines core approvals with the chosen options (or every option)", () => {
+    expect(allowBuildsFor(choices, { auth: "none", orm: "drizzle", storage: "none" })).toEqual({
+      esbuild: false,
+    });
+    expect(allowBuildsFor(choices, { auth: "custom", orm: "drizzle", storage: "none" })).toEqual({
+      esbuild: false,
+      argon2: true,
+    });
+    expect(allowBuildsFor(choices)).toEqual({ esbuild: false, argon2: true });
+  });
+});
+
 describe("toSetupArgs", () => {
   it("builds a non-interactive setup call", () => {
     expect(toSetupArgs("shop", { auth: "none", orm: "drizzle" }, ["--skip-install"])).toEqual([
@@ -115,6 +130,7 @@ describe("toSetupArgs", () => {
       "--orm",
       "drizzle",
       "--yes",
+      "--force",
       "--skip-install",
     ]);
   });

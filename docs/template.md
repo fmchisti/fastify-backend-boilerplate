@@ -41,9 +41,9 @@ The template compiles and runs with every option present at once: `@setup-select
 
 1. Implement the interface under `src/<area>/providers/<id>/` with the same factory name as the other options (`createAuthProvider`, `createStorage`, `createDatabase`). Validate env inside with `loadEnv`. Accept injected clients for tests.
 2. Add tests next to the others (`test/providers/<id>.test.ts`, …) using injected fakes, no network.
-3. Add the option to `setup/features.ts`: `paths`, `dependencies`, `devDependencies`, `scripts`, `env`, `nextSteps`, and `requires` if it only works with some options of another feature. Install dependencies in the template's `package.json`.
+3. Add the option to `setup/features.ts`: `paths`, `dependencies`, `devDependencies`, `scripts`, `env`, `nextSteps`, `allowBuilds` for dependencies with install scripts, and `requires` if it only works with some options of another feature. Install dependencies in the template's `package.json`.
 4. Add `@setup-if` blocks where the option changes shared files (Dockerfile, CI env, docs).
-5. Run `pnpm setup:choices` (so `pnpm create fastra` asks about it), then `pnpm setup:verify --only <id>`, then the full matrix.
+5. Run `pnpm setup:choices` (so `pnpm create fastra` asks about it). If `allowBuilds` changed, update `pnpm-workspace.yaml` to match (`test/setup/engine.test.ts` checks it). Then run `pnpm setup:verify --only <id>`, then the full matrix.
 
 Adding a whole feature (a new question): add it to `features`, the CLI flags in `setup/cli.ts`, the matrix in `setup/verify.ts`, and `test/setup/engine.test.ts` if the engine changes.
 
@@ -59,15 +59,34 @@ Each combination is applied to a temporary copy (sharing `node_modules`). Then i
 
 CI runs the matrix (`setup-matrix` job) and a Docker smoke test for a Drizzle and a Prisma + Redis project (`docker` job) on every pull request.
 
+## Install scripts (`allowBuilds`)
+
+pnpm only runs dependency install scripts listed in `allowBuilds` in `pnpm-workspace.yaml` (`true` runs, `false` skips). pnpm 11 fails the install on unlisted ones and no longer reads the `pnpm` field in `package.json`. pnpm 10.28 is the first release that reads `allowBuilds`.
+
+- Each option lists its own in `setup/features.ts` (`allowBuilds`), and `CORE_ALLOW_BUILDS` covers dependencies every project has.
+- The template's `pnpm-workspace.yaml` lists every option's entries. Setup rewrites it with only the selected ones.
+- A dependency update that adds a package with an install script fails pnpm 11 installs until it is listed. The `monorepo` CI job runs pnpm 11 and catches this.
+
 ## `create-fastra` package
 
 `packages/create-fastra/` is the `pnpm create fastra` CLI. It downloads the template with giget (skipping `packages/`, `node_modules`, `.env`, …), then asks the project name and every choice **before installing anything**, using `setup/choices.json` (the questions and `requires` rules from `setup/features.ts` as plain JSON). After the user confirms it runs `pnpm install` and `pnpm setup:project --name … --auth … --yes` (forwarding any other options), then creates a git repository with an initial commit. Cancelling removes the downloaded files. Setup removes `packages/` from generated projects.
 
 After changing `setup/features.ts`, run `pnpm setup:choices` to rewrite `setup/choices.json`; `test/setup/choices.test.ts` fails if it is stale or if the CLI's option filtering disagrees with the setup engine. Templates without `choices.json` fall back to letting setup ask after install.
 
-- Code: `src/cli.ts` (argument parsing, target checks, template fetching) and `src/index.ts` (the interactive flow). Tests: `packages/create-fastra/test/`, run by the root `pnpm test`.
+**Monorepo mode.** When a parent folder has a `pnpm-workspace.yaml`, the CLI:
+1. Checks that the target is listed under `packages`. If not, it fails before downloading and suggests a listed folder.
+2. After confirmation, deletes the project's `pnpm-lock.yaml`, `pnpm-workspace.yaml`, and `packageManager`, and adds the whole template's `allowBuilds` to the root. The first install still contains every provider, and pnpm 11 fails on unapproved install scripts (it also writes placeholder entries into the root file).
+3. Passes `--force` to setup: inside a repository, the new folder always counts as an uncommitted change.
+4. After setup, removes the root `allowBuilds` entries it added that the chosen options do not need.
+5. With a root `turbo.json`, writes a package `turbo.json` (`outputs: ["dist/**"]`) and a `check-types` script.
+
+Inside any existing git repository (monorepo or not) it skips `git init` and deletes the project's `.github/`.
+
+- Code: `src/cli.ts` (argument parsing, target checks, template fetching), `src/monorepo.ts` (workspace detection and root file edits), and `src/index.ts` (the interactive flow). Tests: `packages/create-fastra/test/`, run by the root `pnpm test`.
 - `--template` accepts a giget source (`gh:fmchisti/fastra#v1.0.0`) or a local folder, which CI uses to test the current commit.
 - CI job `create-fastra` builds and packs the package like `npm publish`, creates a project from the checkout with `pnpm dlx`, and checks it (name, no setup files, clean git tree, check/type-check/test).
+- CI job `monorepo` does the same inside a fresh Turborepo on pnpm 10.28 and pnpm 11. It checks the root files, then runs `turbo run build lint check-types test` and a cached rebuild. It installs without the template's lockfile, so newer dependency versions are tested too.
+- CI job `latest-dependencies` type-checks and tests the template with the newest versions its ranges allow, which is what a monorepo installs.
 
 ### Publishing
 
@@ -89,5 +108,6 @@ For a new CLI release, bump `version` in `packages/create-fastra/package.json`, 
 - [ ] `pnpm check && pnpm type-check && pnpm test`
 - [ ] `pnpm setup:verify` passes for every combination
 - [ ] New env vars in `CORE_ENV` or the option's `env`
+- [ ] New dependencies with install scripts in `allowBuilds` (manifest and `pnpm-workspace.yaml`)
 - [ ] Docs use directives so generated projects only describe what they contain
 - [ ] `AGENTS.md` updated if conventions changed

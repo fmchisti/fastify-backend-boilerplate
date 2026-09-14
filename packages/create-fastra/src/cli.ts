@@ -16,11 +16,13 @@ Examples:
   pnpm create fastra shop-api
   pnpm create fastra shop-api --auth logto --orm prisma --storage s3 --redis redis --deploy railway --yes
   pnpm create fastra gateway --auth none --orm none --storage none --redis none --deploy none --yes
+  pnpm create fastra apps/api     (from a monorepo root: uses the workspace's lockfile and settings)
 
 Options:
   --template <source>  Template to download (default: ${DEFAULT_TEMPLATE}).
                        A branch or tag: gh:fmchisti/fastra#v1.0.0. A local folder: ./fastra
   --no-git             Do not create a git repository and initial commit
+                       (skipped anyway inside an existing git repository)
   -h, --help           Show this help
 
 Every other option is passed to Fastra's setup:
@@ -95,7 +97,16 @@ const isLocalPath = (source: string): boolean =>
   source.startsWith(".") || source.startsWith("/") || /^[A-Za-z]:[\\/]/.test(source);
 
 /** Never copied into a new project: build output, dependencies, secrets, and this tool. */
-const SKIP = new Set([".git", "node_modules", "dist", "coverage", "uploads", ".env", "packages"]);
+const SKIP = new Set([
+  ".git",
+  "node_modules",
+  "dist",
+  "coverage",
+  "uploads",
+  ".env",
+  "packages",
+  ".DS_Store",
+]);
 const SKIP_PATHS = ["src/generated"];
 
 export const shouldSkip = (relativePath: string): boolean => {
