@@ -5,7 +5,11 @@ alwaysApply: true
 
 Follow [AGENTS.md](../../AGENTS.md): workflow, definition of done, layout, module pattern, naming, API/auth/security rules, testing, and git conventions.
 
-- New CRUD resource: `pnpm gen:module <name> --fields "..."`, then customize.
-- Provider details (auth, ORM, storage, Redis): [docs/providers.md](../../docs/providers.md).
-- Keep `// @gen:` markers.
+<!-- @setup-if orm!=none -->
+- New CRUD resource: `pnpm gen:module <name> --fields "..."`, then customize. Keep `// @gen:` markers.
+<!-- @setup-endif -->
+<!-- @setup-if orm=none -->
+- New feature calling another API: typed `client.ts` injected through `container.ts` (see AGENTS.md).
+<!-- @setup-endif -->
+- Provider details: [docs/providers.md](../../docs/providers.md).
 - Verify every change: `pnpm check:fix && pnpm type-check && pnpm test`.

@@ -3,6 +3,8 @@ import type { Field, FieldType, ModuleNames } from "./model.ts";
 export interface TemplateContext {
   names: ModuleNames;
   fields: Field[];
+  /** User-owned records (needs auth). `false` generates a public resource. */
+  owned: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -133,13 +135,13 @@ export const Delete${pascal}Schema = {
 `;
 };
 
-export const docsTemplate = ({ names }: TemplateContext) => {
+export const docsTemplate = ({ names, owned }: TemplateContext) => {
   const { singular, plural } = names;
   return `/**
  * OpenAPI / Swagger documentation for ${plural.words} endpoints.
  */
 
-const base = { tags: ["${plural.pascal}"], security: [{ bearerAuth: [] }] };
+const base = { tags: ["${plural.pascal}"]${owned ? ", security: [{ bearerAuth: [] }]" : ""} };
 
 export const list${plural.pascal}Docs = { ...base, summary: "List ${plural.words}", description: "Paginated, newest first." };
 export const get${singular.pascal}Docs = { ...base, summary: "Get a ${singular.words}" };
@@ -149,13 +151,14 @@ export const delete${singular.pascal}Docs = { ...base, summary: "Delete a ${sing
 `;
 };
 
-export const repositoryTypesTemplate = ({ names }: TemplateContext) => {
+export const repositoryTypesTemplate = ({ names, owned }: TemplateContext) => {
   const { pascal } = names.singular;
-  return `import type { CrudRepository } from "../../../lib/crud.ts";
+  const type = owned ? "CrudRepository" : "PublicCrudRepository";
+  return `import type { ${type} } from "../../../lib/crud.ts";
 import type { Create${pascal}Input, ${pascal}, Update${pascal}Input } from "../schema.ts";
 
 /** Data access for ${names.plural.words}. Add query methods here as the module grows. */
-export type ${pascal}Repository = CrudRepository<${pascal}, Create${pascal}Input, Update${pascal}Input>;
+export type ${pascal}Repository = ${type}<${pascal}, Create${pascal}Input, Update${pascal}Input>;
 `;
 };
 
@@ -181,8 +184,12 @@ ${lines(
 
 export const repositoryDrizzleTemplate = (context: TemplateContext) => {
   const { singular, plural } = context.names;
+  const { owned } = context;
   const table = plural.camel;
-  return `import { and, count, desc, eq } from "drizzle-orm";
+  const u = owned ? "userId, " : "";
+  const scope = owned ? "byOwner(userId, id)" : `eq(${table}.id, id)`;
+
+  return `import { ${owned ? "and, " : ""}count, desc, eq } from "drizzle-orm";
 import type { AppDatabase } from "../../../db/drizzle/index.ts";
 import { type ${singular.pascal}Row, ${table} } from "../../../db/drizzle/schema/${plural.kebab}.ts";
 import { withoutUndefined } from "../../../lib/crud.ts";
@@ -191,50 +198,48 @@ import type { ${singular.pascal} } from "../schema.ts";
 import type { ${singular.pascal}Repository } from "./types.ts";
 
 ${toEntity(context, `${singular.pascal}Row`)}
-
-const byOwner = (userId: string, id: string) => and(eq(${table}.userId, userId), eq(${table}.id, id));
-
+${owned ? `\nconst byOwner = (userId: string, id: string) => and(eq(${table}.userId, userId), eq(${table}.id, id));\n` : ""}
 export const create${singular.pascal}Repository = ({ client: db }: AppDatabase): ${singular.pascal}Repository => ({
-  list: async (userId, query) => {
-    const where = eq(${table}.userId, userId);
+  list: async (${u}query) => {
+    ${owned ? `const where = eq(${table}.userId, userId);` : ""}
     const [rows, [totalRow]] = await Promise.all([
       db
         .select()
         .from(${table})
-        .where(where)
+        ${owned ? ".where(where)" : ""}
         .orderBy(desc(${table}.createdAt), desc(${table}.id))
         .limit(query.pageSize)
         .offset(toOffset(query)),
-      db.select({ total: count() }).from(${table}).where(where),
+      db.select({ total: count() }).from(${table})${owned ? ".where(where)" : ""},
     ]);
     return { items: rows.map(to${singular.pascal}), total: totalRow?.total ?? 0 };
   },
 
-  findById: async (userId, id) => {
-    const [row] = await db.select().from(${table}).where(byOwner(userId, id)).limit(1);
+  findById: async (${u}id) => {
+    const [row] = await db.select().from(${table}).where(${scope}).limit(1);
     return row ? to${singular.pascal}(row) : null;
   },
 
-  create: async (userId, input) => {
+  create: async (${u}input) => {
     const [row] = await db
       .insert(${table})
-      .values({ ...input, userId })
+      .values(${owned ? "{ ...input, userId }" : "input"})
       .returning();
     if (!row) throw new Error("Insert did not return a row");
     return to${singular.pascal}(row);
   },
 
-  update: async (userId, id, input) => {
+  update: async (${u}id, input) => {
     const [row] = await db
       .update(${table})
       .set({ ...withoutUndefined(input), updatedAt: new Date() })
-      .where(byOwner(userId, id))
+      .where(${scope})
       .returning();
     return row ? to${singular.pascal}(row) : null;
   },
 
-  delete: async (userId, id) => {
-    const deleted = await db.delete(${table}).where(byOwner(userId, id)).returning({ id: ${table}.id });
+  delete: async (${u}id) => {
+    const deleted = await db.delete(${table}).where(${scope}).returning({ id: ${table}.id });
     return deleted.length > 0;
   },
 });
@@ -243,7 +248,11 @@ export const create${singular.pascal}Repository = ({ client: db }: AppDatabase):
 
 export const repositoryPrismaTemplate = (context: TemplateContext) => {
   const { singular } = context.names;
+  const { owned } = context;
   const model = singular.camel;
+  const u = owned ? "userId, " : "";
+  const where = owned ? "{ id, userId }" : "{ id }";
+
   return `import type { AppDatabase } from "../../../db/prisma/index.ts";
 import type { ${singular.pascal} as ${singular.pascal}Row } from "../../../generated/prisma/client.ts";
 import { withoutUndefined } from "../../../lib/crud.ts";
@@ -254,48 +263,50 @@ import type { ${singular.pascal}Repository } from "./types.ts";
 ${toEntity(context, `${singular.pascal}Row`)}
 
 export const create${singular.pascal}Repository = ({ client: prisma }: AppDatabase): ${singular.pascal}Repository => ({
-  list: async (userId, query) => {
+  list: async (${u}query) => {
     const [rows, total] = await prisma.$transaction([
       prisma.${model}.findMany({
-        where: { userId },
+        ${owned ? "where: { userId }," : ""}
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         take: query.pageSize,
         skip: toOffset(query),
       }),
-      prisma.${model}.count({ where: { userId } }),
+      prisma.${model}.count(${owned ? "{ where: { userId } }" : ""}),
     ]);
     return { items: rows.map(to${singular.pascal}), total };
   },
 
-  findById: async (userId, id) => {
-    const row = await prisma.${model}.findFirst({ where: { id, userId } });
+  findById: async (${u}id) => {
+    const row = await prisma.${model}.findFirst({ where: ${where} });
     return row ? to${singular.pascal}(row) : null;
   },
 
-  create: async (userId, input) => {
-    const row = await prisma.${model}.create({ data: { ...input, userId } });
+  create: async (${u}input) => {
+    const row = await prisma.${model}.create({ data: ${owned ? "{ ...input, userId }" : "input"} });
     return to${singular.pascal}(row);
   },
 
-  update: async (userId, id, input) => {
-    // updateMany scopes by owner; update() would only filter by id
-    const { count } = await prisma.${model}.updateMany({ where: { id, userId }, data: withoutUndefined(input) });
+  update: async (${u}id, input) => {
+    ${owned ? "// updateMany scopes by owner; update() would only filter by id\n    " : ""}const { count } = await prisma.${model}.updateMany({ where: ${where}, data: withoutUndefined(input) });
     if (count === 0) return null;
-    const row = await prisma.${model}.findFirst({ where: { id, userId } });
+    const row = await prisma.${model}.findFirst({ where: ${where} });
     return row ? to${singular.pascal}(row) : null;
   },
 
-  delete: async (userId, id) => {
-    const { count } = await prisma.${model}.deleteMany({ where: { id, userId } });
+  delete: async (${u}id) => {
+    const { count } = await prisma.${model}.deleteMany({ where: ${where} });
     return count > 0;
   },
 });
 `;
 };
 
-export const serviceTemplate = ({ names }: TemplateContext) => {
+export const serviceTemplate = ({ names, owned }: TemplateContext) => {
   const { pascal, words } = names.singular;
   const capitalized = words.charAt(0).toUpperCase() + words.slice(1);
+  const param = owned ? "userId: string, " : "";
+  const u = owned ? "userId, " : "";
+
   return `import { HttpError } from "../../lib/errors.ts";
 import type { Page, PaginationQuery } from "../../lib/pagination.ts";
 import type { ${pascal}Repository } from "./repository/index.ts";
@@ -304,43 +315,44 @@ import type { Create${pascal}Input, ${pascal}, Update${pascal}Input } from "./sc
 const notFound = (): HttpError => new HttpError(404, "${capitalized} not found");
 
 export interface ${pascal}Service {
-  list(userId: string, query: PaginationQuery): Promise<Page<${pascal}>>;
-  get(userId: string, id: string): Promise<${pascal}>;
-  create(userId: string, input: Create${pascal}Input): Promise<${pascal}>;
-  update(userId: string, id: string, input: Update${pascal}Input): Promise<${pascal}>;
-  delete(userId: string, id: string): Promise<void>;
+  list(${param}query: PaginationQuery): Promise<Page<${pascal}>>;
+  get(${param}id: string): Promise<${pascal}>;
+  create(${param}input: Create${pascal}Input): Promise<${pascal}>;
+  update(${param}id: string, input: Update${pascal}Input): Promise<${pascal}>;
+  delete(${param}id: string): Promise<void>;
 }
 
 /** Business rules live here; the repository only does data access. */
 export const create${pascal}Service = (repository: ${pascal}Repository): ${pascal}Service => ({
-  list: (userId, query) => repository.list(userId, query),
+  list: (${u}query) => repository.list(${u}query),
 
-  get: async (userId, id) => {
-    const item = await repository.findById(userId, id);
+  get: async (${u}id) => {
+    const item = await repository.findById(${u}id);
     if (!item) throw notFound();
     return item;
   },
 
-  create: (userId, input) => repository.create(userId, input),
+  create: (${u}input) => repository.create(${u}input),
 
-  update: async (userId, id, input) => {
-    const item = await repository.update(userId, id, input);
+  update: async (${u}id, input) => {
+    const item = await repository.update(${u}id, input);
     if (!item) throw notFound();
     return item;
   },
 
-  delete: async (userId, id) => {
-    if (!(await repository.delete(userId, id))) throw notFound();
+  delete: async (${u}id) => {
+    if (!(await repository.delete(${u}id))) throw notFound();
   },
 });
 `;
 };
 
-export const handlerTemplate = ({ names }: TemplateContext) => {
+export const handlerTemplate = ({ names, owned }: TemplateContext) => {
   const { singular, plural } = names;
   const S = singular.pascal;
-  return `import { getAuthUser } from "../../auth/middleware.ts";
-import { toPaginatedResponse } from "../../lib/pagination.ts";
+  const who = owned ? "getAuthUser(request).id, " : "";
+
+  return `${owned ? 'import { getAuthUser } from "../../auth/middleware.ts";\n' : ""}import { toPaginatedResponse } from "../../lib/pagination.ts";
 import type { ZodRouteHandler } from "../../types/fastify.ts";
 import type {
   Create${S}Schema,
@@ -353,23 +365,23 @@ import type { ${S}Service } from "./service.ts";
 
 export const create${S}Handlers = (service: ${S}Service) => {
   const list: ZodRouteHandler<typeof List${plural.pascal}Schema> = async (request) => {
-    const page = await service.list(getAuthUser(request).id, request.query);
+    const page = await service.list(${who}request.query);
     return toPaginatedResponse(page, request.query);
   };
 
   const get: ZodRouteHandler<typeof Get${S}Schema> = async (request) =>
-    service.get(getAuthUser(request).id, request.params.id);
+    service.get(${who}request.params.id);
 
   const create: ZodRouteHandler<typeof Create${S}Schema> = async (request, reply) => {
-    const item = await service.create(getAuthUser(request).id, request.body);
+    const item = await service.create(${who}request.body);
     return reply.status(201).send(item);
   };
 
   const update: ZodRouteHandler<typeof Update${S}Schema> = async (request) =>
-    service.update(getAuthUser(request).id, request.params.id, request.body);
+    service.update(${who}request.params.id, request.body);
 
   const remove: ZodRouteHandler<typeof Delete${S}Schema> = async (request, reply) => {
-    await service.delete(getAuthUser(request).id, request.params.id);
+    await service.delete(${who}request.params.id);
     return reply.status(204).send(null);
   };
 
@@ -378,12 +390,11 @@ export const create${S}Handlers = (service: ${S}Service) => {
 `;
 };
 
-export const routesTemplate = ({ names }: TemplateContext) => {
+export const routesTemplate = ({ names, owned }: TemplateContext) => {
   const { singular, plural } = names;
   const S = singular.pascal;
   return `import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
-import { authenticate } from "../../auth/middleware.ts";
-import * as docs from "./docs.ts";
+${owned ? 'import { authenticate } from "../../auth/middleware.ts";\n' : ""}import * as docs from "./docs.ts";
 import { create${S}Handlers } from "./handler.ts";
 import type { ${S}Repository } from "./repository/index.ts";
 import {
@@ -402,8 +413,7 @@ export interface ${S}RoutesOptions {
 const ${singular.camel}Routes: FastifyPluginAsyncZod<${S}RoutesOptions> = async (fastify, options) => {
   const handlers = create${S}Handlers(create${S}Service(options.repository));
 
-  fastify.addHook("onRequest", authenticate);
-
+${owned ? '  fastify.addHook("onRequest", authenticate);\n' : '  // Public resource: add `fastify.addHook("onRequest", authenticate)` if it should require a user\n'}
   fastify.route({
     method: "GET",
     url: "/${plural.kebab}",
@@ -444,9 +454,9 @@ export default ${singular.camel}Routes;
 // Database schema
 // ---------------------------------------------------------------------------
 
-export const drizzleTableTemplate = ({ names, fields }: TemplateContext) => {
+export const drizzleTableTemplate = ({ names, fields, owned }: TemplateContext) => {
   const { singular, plural } = names;
-  const builders = new Set(["index", "pgTable", "text", "timestamp", "uuid"]);
+  const builders = new Set(["index", "pgTable", "timestamp", "uuid", ...(owned ? ["text"] : [])]);
   for (const field of fields) builders.add(DRIZZLE_BUILDER[field.type].fn);
   const columns = fields.map(
     (f) => `${f.name}: ${DRIZZLE_BUILDER[f.type].call(f.column)}${f.optional ? "" : ".notNull()"},`,
@@ -459,20 +469,18 @@ export const ${plural.camel} = pgTable(
   "${plural.snake}",
   {
     id: uuid("id").primaryKey().default(sql\`gen_random_uuid()\`),
-    // Auth provider user id. No foreign key, so any auth provider works.
-    userId: text("user_id").notNull(),
-${lines(columns, "    ")}
+${owned ? '    // Auth provider user id. No foreign key, so any auth provider works.\n    userId: text("user_id").notNull(),\n' : ""}${lines(columns, "    ")}
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index("${plural.snake}_user_id_created_at_idx").on(table.userId, table.createdAt)],
+  (table) => [${owned ? `index("${plural.snake}_user_id_created_at_idx").on(table.userId, table.createdAt)` : `index("${plural.snake}_created_at_idx").on(table.createdAt)`}],
 );
 
 export type ${singular.pascal}Row = typeof ${plural.camel}.$inferSelect;
 `;
 };
 
-export const prismaModelTemplate = ({ names, fields }: TemplateContext) => {
+export const prismaModelTemplate = ({ names, fields, owned }: TemplateContext) => {
   const { singular, plural } = names;
   const field = (name: string, type: string, attributes: string) =>
     `  ${name} ${type}${attributes ? ` ${attributes}` : ""}`;
@@ -484,13 +492,11 @@ export const prismaModelTemplate = ({ names, fields }: TemplateContext) => {
 
   return `model ${singular.pascal} {
   id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  // Auth provider user id. No foreign key, so any auth provider works.
-  userId String @map("user_id")
-${columns.join("\n")}
+${owned ? '  // Auth provider user id. No foreign key, so any auth provider works.\n  userId String @map("user_id")\n' : ""}${columns.join("\n")}
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  @@index([userId, createdAt], map: "${plural.snake}_user_id_created_at_idx")
+  ${owned ? `@@index([userId, createdAt], map: "${plural.snake}_user_id_created_at_idx")` : `@@index([createdAt], map: "${plural.snake}_created_at_idx")`}
   @@map("${plural.snake}")
 }
 `;
@@ -500,7 +506,7 @@ ${columns.join("\n")}
 // Tests
 // ---------------------------------------------------------------------------
 
-export const fakeTemplate = ({ names, fields }: TemplateContext) => {
+export const fakeTemplate = ({ names, fields, owned }: TemplateContext) => {
   const { singular } = names;
   const S = singular.pascal;
   const create = fields.map((f) => `${f.name}: ${SAMPLE[f.type].create},`);
@@ -508,8 +514,7 @@ export const fakeTemplate = ({ names, fields }: TemplateContext) => {
   const merge = fields.map(
     (f) => `${f.name}: input.${f.name} === undefined ? row.${f.name} : input.${f.name},`,
   );
-
-  return `import { randomUUID } from "node:crypto";
+  const header = `import { randomUUID } from "node:crypto";
 import type { ${S}Repository } from "../../src/modules/${names.plural.kebab}/repository/types.ts";
 import type { ${S} } from "../../src/modules/${names.plural.kebab}/schema.ts";
 
@@ -521,7 +526,47 @@ ${lines(create, "  ")}
 export const ${singular.camel}UpdateSample = {
 ${lines(update, "  ")}
 };
+`;
 
+  if (!owned) {
+    return `${header}
+/** In-memory ${S}Repository. Passes the same contract tests as the ORM implementation. */
+export const createMemory${S}Repository = (): ${S}Repository => {
+  const rows = new Map<string, ${S}>();
+  let clock = Date.now();
+  const now = () => new Date(++clock);
+
+  return {
+    list: async (query) => {
+      const all = [...rows.values()].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      const start = (query.page - 1) * query.pageSize;
+      return { items: all.slice(start, start + query.pageSize), total: all.length };
+    },
+    findById: async (id) => rows.get(id) ?? null,
+    create: async (input) => {
+      const timestamp = now();
+      const row = { ...input, id: randomUUID(), createdAt: timestamp, updatedAt: timestamp };
+      rows.set(row.id, row);
+      return row;
+    },
+    update: async (id, input) => {
+      const row = rows.get(id);
+      if (!row) return null;
+      const next = {
+        ...row,
+${lines(merge, "        ")}
+        updatedAt: now(),
+      };
+      rows.set(id, next);
+      return next;
+    },
+    delete: async (id) => rows.delete(id),
+  };
+};
+`;
+  }
+
+  return `${header}
 /** In-memory ${S}Repository. Passes the same contract tests as the ORM implementation. */
 export const createMemory${S}Repository = (): ${S}Repository => {
   const rows = new Map<string, ${S} & { userId: string }>();
@@ -568,63 +613,68 @@ ${lines(merge, "        ")}
 `;
 };
 
-export const routeTestTemplate = ({ names, fields }: TemplateContext) => {
+export const routeTestTemplate = ({ names, fields, owned }: TemplateContext) => {
   const { singular, plural } = names;
   const firstField = fields[0];
   const invalidPayload = firstField
     ? `{ ...${singular.camel}Sample, ${firstField.name}: ${firstField.type === "string" || firstField.type === "text" ? "123" : '"not-valid"'} }`
     : "{}";
+  // Public resources send no credentials
+  const as = (user: string) => (owned ? `, headers: ${user}` : "");
+  const asMultiline = (user: string) => (owned ? `\n      headers: ${user},` : "");
 
   return `import { describe, expect, it } from "vitest";
-import { bearer } from "./fakes/auth.ts";
-import { ${singular.camel}Sample, ${singular.camel}UpdateSample } from "./fakes/${plural.kebab}.ts";
+${owned ? 'import { bearer } from "./fakes/auth.ts";\n' : ""}import { ${singular.camel}Sample, ${singular.camel}UpdateSample } from "./fakes/${plural.kebab}.ts";
 import { useTestApp } from "./helpers.ts";
-
-const alice = bearer("alice-token");
-const bob = bearer("bob-token");
+${owned ? '\nconst alice = bearer("alice-token");\nconst bob = bearer("bob-token");' : ""}
 const url = "/api/${plural.kebab}";
 
 describe("${plural.words} routes", () => {
   const app = useTestApp();
 
   const create = async () => {
-    const response = await app().inject({ method: "POST", url, headers: alice, payload: ${singular.camel}Sample });
+    const response = await app().inject({ method: "POST", url${as("alice")}, payload: ${singular.camel}Sample });
     expect(response.statusCode).toBe(201);
     return response.json<{ id: string }>();
   };
-
+${
+  owned
+    ? `
   it("requires authentication", async () => {
     const response = await app().inject({ method: "GET", url });
 
     expect(response.statusCode).toBe(401);
   });
-
+`
+    : ""
+}
   it("creates, reads, lists, updates, and deletes", async () => {
     const created = await create();
     expect(created).toMatchObject(${singular.camel}Sample);
 
-    const fetched = await app().inject({ method: "GET", url: \`\${url}/\${created.id}\`, headers: alice });
+    const fetched = await app().inject({ method: "GET", url: \`\${url}/\${created.id}\`${as("alice")} });
     expect(fetched.json()).toMatchObject({ id: created.id, ...${singular.camel}Sample });
 
-    const list = await app().inject({ method: "GET", url, headers: alice });
+    const list = await app().inject({ method: "GET", url${as("alice")} });
     expect(list.json<{ items: { id: string }[] }>().items.map((item) => item.id)).toContain(created.id);
 
     const updated = await app().inject({
       method: "PATCH",
-      url: \`\${url}/\${created.id}\`,
-      headers: alice,
+      url: \`\${url}/\${created.id}\`,${asMultiline("alice")}
       payload: ${singular.camel}UpdateSample,
     });
     expect(updated.statusCode).toBe(200);
     expect(updated.json()).toMatchObject(${singular.camel}UpdateSample);
 
-    const deleted = await app().inject({ method: "DELETE", url: \`\${url}/\${created.id}\`, headers: alice });
+    const deleted = await app().inject({ method: "DELETE", url: \`\${url}/\${created.id}\`${as("alice")} });
     expect(deleted.statusCode).toBe(204);
 
-    const missing = await app().inject({ method: "GET", url: \`\${url}/\${created.id}\`, headers: alice });
+    const missing = await app().inject({ method: "GET", url: \`\${url}/\${created.id}\`${as("alice")} });
     expect(missing.statusCode).toBe(404);
   });
-
+${
+  owned
+    ? `
   it("hides other users' records", async () => {
     const created = await create();
 
@@ -632,13 +682,15 @@ describe("${plural.words} routes", () => {
 
     expect(response.statusCode).toBe(404);
   });
-
+`
+    : ""
+}
   it("validates input", async () => {
-    const invalid = await app().inject({ method: "POST", url, headers: alice, payload: ${invalidPayload} });
+    const invalid = await app().inject({ method: "POST", url${as("alice")}, payload: ${invalidPayload} });
     expect(invalid.statusCode).toBe(400);
 
     const created = await create();
-    const empty = await app().inject({ method: "PATCH", url: \`\${url}/\${created.id}\`, headers: alice, payload: {} });
+    const empty = await app().inject({ method: "PATCH", url: \`\${url}/\${created.id}\`${as("alice")}, payload: {} });
     expect(empty.statusCode).toBe(400);
   });
 });
@@ -646,17 +698,18 @@ describe("${plural.words} routes", () => {
 };
 
 export const contractTestTemplate = (
-  { names }: TemplateContext,
+  { names, owned }: TemplateContext,
   variant: "memory" | "drizzle" | "prisma",
 ) => {
   const { singular, plural } = names;
   const S = singular.pascal;
+  const contract = owned ? "describeCrudRepositoryContract" : "describePublicCrudRepositoryContract";
   const imports = `import {
   Create${S}BodySchema,
   Update${S}BodySchema,
 } from "../../src/modules/${plural.kebab}/schema.ts";
 import { ${singular.camel}Sample, ${singular.camel}UpdateSample${variant === "memory" ? `, createMemory${S}Repository` : ""} } from "../fakes/${plural.kebab}.ts";
-import { describeCrudRepositoryContract } from "./crud-contract.ts";`;
+import { ${contract} } from "./crud-contract.ts";`;
   const samples = `{
   create: Create${S}BodySchema.parse(${singular.camel}Sample),
   update: Update${S}BodySchema.parse(${singular.camel}UpdateSample),
@@ -665,7 +718,7 @@ import { describeCrudRepositoryContract } from "./crud-contract.ts";`;
   if (variant === "memory") {
     return `${imports}
 
-describeCrudRepositoryContract(
+${contract}(
   "${plural.words} (memory fake)",
   async () => {
     let repository = createMemory${S}Repository();
@@ -689,7 +742,7 @@ describeCrudRepositoryContract(
 ${imports}
 import { ${harness} } from "./${variant}-harness.ts";
 
-describeCrudRepositoryContract(
+${contract}(
   "${plural.words} (${variant})",
   async () => {
     const { database, postgres } = await ${harness}();

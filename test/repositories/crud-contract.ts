@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import type { CrudRepository } from "../../src/lib/crud.ts";
+import type { CrudRepository, PublicCrudRepository } from "../../src/lib/crud.ts";
 
 export interface CrudHarness<TEntity, TCreate, TUpdate> {
   repository: CrudRepository<TEntity, TCreate, TUpdate>;
@@ -94,6 +94,68 @@ export const describeCrudRepositoryContract = <
       expect(await repo().delete("alice", created.id)).toBe(true);
       expect(await repo().findById("alice", created.id)).toBeNull();
       expect(await repo().delete("alice", created.id)).toBe(false);
+    });
+  });
+};
+
+export interface PublicCrudHarness<TEntity, TCreate, TUpdate> {
+  repository: PublicCrudRepository<TEntity, TCreate, TUpdate>;
+  reset(): Promise<void>;
+  close(): Promise<void>;
+}
+
+/** Behaviour every PublicCrudRepository must have, regardless of ORM. */
+export const describePublicCrudRepositoryContract = <
+  TEntity extends Entity,
+  TCreate extends object,
+  TUpdate extends object,
+>(
+  name: string,
+  createHarness: () => Promise<PublicCrudHarness<TEntity, TCreate, TUpdate>>,
+  samples: { create: TCreate; update: TUpdate },
+) => {
+  describe(`PublicCrudRepository contract: ${name}`, () => {
+    let harness: PublicCrudHarness<TEntity, TCreate, TUpdate>;
+    const repo = () => harness.repository;
+
+    beforeAll(async () => {
+      harness = await createHarness();
+    });
+    beforeEach(() => harness.reset());
+    afterAll(() => harness.close());
+
+    it("creates a record with id, timestamps, and the given fields", async () => {
+      const created = await repo().create(samples.create);
+
+      expect(created.id).toMatch(/^[0-9a-f-]{36}$/);
+      expect(created.createdAt).toBeInstanceOf(Date);
+      expect(created).toMatchObject(samples.create);
+      expect(await repo().findById(created.id)).toEqual(created);
+      expect(await repo().findById(MISSING_ID)).toBeNull();
+    });
+
+    it("lists newest first with pagination and totals", async () => {
+      const ids: string[] = [];
+      for (let i = 0; i < 3; i++) {
+        ids.push((await repo().create(samples.create)).id);
+        await tick();
+      }
+
+      const first = await repo().list({ page: 1, pageSize: 2 });
+      expect(first.total).toBe(3);
+      expect(first.items.map((item) => item.id)).toEqual([ids[2], ids[1]]);
+      expect((await repo().list({ page: 2, pageSize: 2 })).items.map((item) => item.id)).toEqual([ids[0]]);
+    });
+
+    it("updates provided fields and deletes", async () => {
+      const created = await repo().create(samples.create);
+
+      expect(await repo().update(created.id, samples.update)).toMatchObject(samples.update);
+      expect(await repo().update(MISSING_ID, samples.update)).toBeNull();
+
+      expect(await repo().delete(created.id)).toBe(true);
+      expect(await repo().findById(created.id)).toBeNull();
+      expect(await repo().delete(created.id)).toBe(false);
     });
   });
 };

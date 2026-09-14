@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { parseFields, parseModuleName, pluralize } from "../../scripts/gen/model.ts";
-import { addImport, detectOrm, generateModule, insertBeforeMarker } from "../../scripts/gen-module.ts";
+import {
+  addImport,
+  detectOrm,
+  generateModule,
+  insertBeforeMarker,
+  planModule,
+} from "../../scripts/gen-module.ts";
 
 describe("parseModuleName", () => {
   it("derives every naming form", () => {
@@ -122,11 +128,40 @@ describe("generateModule", () => {
     await expect(
       generateModule({
         root: process.cwd(),
-        name: "todo-item",
-        plural: "todos",
+        // src/modules/health exists in every project
+        name: "health-item",
+        plural: "health",
         fields: "name:string",
         dryRun: true,
       }),
     ).rejects.toThrow(/Refusing to overwrite/);
+  });
+});
+
+describe("planModule ownership", () => {
+  const names = parseModuleName("note");
+  const fields = parseFields("title:string");
+  const content = (files: { path: string; content: string }[], suffix: string) =>
+    files.find((file) => file.path.endsWith(suffix))?.content ?? "";
+
+  it("scopes user-owned modules by userId and requires auth", () => {
+    const files = planModule(names, fields, "drizzle", true);
+
+    expect(content(files, "routes.ts")).toContain('addHook("onRequest", authenticate)');
+    expect(content(files, "repository/types.ts")).toContain("CrudRepository<");
+    expect(content(files, "schema/notes.ts")).toContain('userId: text("user_id")');
+    expect(content(files, "test/notes.test.ts")).toContain("hides other users' records");
+  });
+
+  it.each(["drizzle", "prisma"] as const)("creates public %s modules without users or auth", (orm) => {
+    const files = planModule(names, fields, orm, false);
+    const all = files.map((file) => file.content).join("\n");
+
+    expect(all).not.toMatch(/userId|getAuthUser|bearer\(/);
+    expect(content(files, "routes.ts")).not.toContain('from "../../auth/middleware.ts"');
+    expect(content(files, "repository/types.ts")).toContain("PublicCrudRepository<");
+    expect(content(files, `repositories/notes.${orm}.test.ts`)).toContain(
+      "describePublicCrudRepositoryContract",
+    );
   });
 });

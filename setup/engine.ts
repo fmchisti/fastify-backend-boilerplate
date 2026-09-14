@@ -1,8 +1,11 @@
+import { existsSync } from "node:fs";
 import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { glob } from "tinyglobby";
 import {
+  CONDITIONAL,
   CORE_ENV,
+  type ConditionalManifest,
   type EnvEntry,
   FEATURE_IDS,
   type FeatureId,
@@ -23,6 +26,41 @@ const optionsOf = (manifest: Features, feature: string): Record<string, OptionMa
   return entry.options;
 };
 
+/** Why `option` of `feature` cannot be combined with the (partial) selection, or `null` if it can. */
+export const incompatibility = (
+  selection: Record<string, string>,
+  feature: string,
+  option: string,
+  manifest: Features = features,
+): string | null => {
+  const own = optionsOf(manifest, feature)[option];
+  for (const [other, allowed] of Object.entries(own?.requires ?? {})) {
+    const chosen = selection[other];
+    if (chosen !== undefined && !allowed.includes(chosen)) {
+      return `${feature} "${option}" requires ${other} to be one of: ${allowed.join(", ")}`;
+    }
+  }
+  // Options chosen earlier may restrict this feature
+  for (const [other, chosen] of Object.entries(selection)) {
+    if (other === feature) continue;
+    const allowed = manifest[other]?.options[chosen]?.requires?.[feature];
+    if (allowed && !allowed.includes(option)) {
+      return `${other} "${chosen}" requires ${feature} to be one of: ${allowed.join(", ")}`;
+    }
+  }
+  return null;
+};
+
+/** Options of `feature` that fit the features chosen so far. */
+export const allowedOptions = (
+  selection: Record<string, string>,
+  feature: string,
+  manifest: Features = features,
+): string[] =>
+  Object.keys(optionsOf(manifest, feature)).filter(
+    (option) => incompatibility(selection, feature, option, manifest) === null,
+  );
+
 export const validateSelection = (selection: Record<string, string>, manifest: Features = features): void => {
   for (const [feature, entry] of Object.entries(manifest)) {
     const value = selection[feature];
@@ -30,6 +68,10 @@ export const validateSelection = (selection: Record<string, string>, manifest: F
       const valid = Object.keys(entry.options).join(", ");
       throw new Error(`Invalid ${feature} "${value ?? ""}". Choose one of: ${valid}`);
     }
+  }
+  for (const feature of Object.keys(manifest)) {
+    const reason = incompatibility(selection, feature, selection[feature] ?? "", manifest);
+    if (reason) throw new Error(`Invalid combination: ${reason}`);
   }
 };
 
@@ -39,6 +81,11 @@ export const validateSelection = (selection: Record<string, string>, manifest: F
 
 /** A whole line that is a block directive: `// @setup-if a=b`, `# @setup-endif`, `<!-- @setup-template-only -->`. */
 const BLOCK_DIRECTIVE = /^\s*(?:\/\/|#|<!--)\s*@setup-(if|template-only|endif)\b\s*(.*?)\s*(?:-->)?\s*$/;
+/**
+ * `// @setup-emit <text>` becomes `<text>` in the generated project. For lines that must not
+ * be active in the template, such as a lint suppression only needed when a feature is removed.
+ */
+const EMIT_DIRECTIVE = /^(\s*)\/\/\s*@setup-emit\s+(.+?)\s*$/;
 /** A directive trailing code on the same line: `import x from "./drizzle.ts"; // @setup-select orm`. */
 const LINE_DIRECTIVE = /^(.*?\S)\s*\/\/\s*@setup-(select|if)\s+(\S+)\s*$/;
 /** Line-level @setup-if may only remove complete one-line statements, never part of one. */
@@ -46,21 +93,31 @@ const SINGLE_LINE_STATEMENT = /^\s*(import|export)\b.*;\s*$/;
 
 const escapeRegExp = (value: string) => value.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
 
-const parseCondition = (
-  args: string,
+/**
+ * Evaluates a condition: clauses `feature=a,b` (one of) or `feature!=a,b` (none of),
+ * joined with `&` (and) and `|` (or; `&` binds tighter). No spaces.
+ * Example: `auth!=none&orm!=none|redis=redis`.
+ */
+export const evaluateCondition = (
+  expression: string,
   selection: Record<string, string>,
-  manifest: Features,
-  where: string,
-): boolean => {
-  const [feature = "", values = ""] = args.split("=");
-  const allowed = values.split(",").map((value) => value.trim());
-  const options = optionsOf(manifest, feature);
-  for (const value of allowed) {
-    if (!(value in options)) throw new Error(`${where}: unknown ${feature} option "${value}"`);
-  }
-  const selected = selection[feature];
-  return selected !== undefined && allowed.includes(selected);
-};
+  manifest: Features = features,
+  where = "<condition>",
+): boolean =>
+  expression.split("|").some((group) =>
+    group.split("&").every((clause) => {
+      const match = /^([a-z]+)(!?=)([a-z0-9,-]+)$/.exec(clause.trim());
+      if (!match) throw new Error(`${where}: invalid condition "${clause}"`);
+      const [, feature = "", operator, values = ""] = match;
+      const options = optionsOf(manifest, feature);
+      const listed = values.split(",");
+      for (const value of listed) {
+        if (!(value in options)) throw new Error(`${where}: unknown ${feature} option "${value}"`);
+      }
+      const inList = listed.includes(selection[feature] ?? "");
+      return operator === "=" ? inList : !inList;
+    }),
+  );
 
 /**
  * Apply `@setup-*` directives to one file's content.
@@ -69,13 +126,15 @@ const parseCondition = (
  * - `import { x } from "./providers/better-auth/index.ts"; // @setup-select auth`
  *   replaces the path segment naming an option of <feature> with the selected option.
  * - `import fileRoutes from "./modules/files/routes.ts"; // @setup-if storage=s3,local`
- *   keeps the line only for the listed options. Only for one-line import/export statements.
+ *   keeps the line only when the condition matches. Only for one-line import/export statements.
  *
  * Blocks (for code that tools do not reorder):
- * - `// @setup-if <feature>=<a>,<b>` ... `// @setup-endif`
+ * - `// @setup-if <condition>` ... `// @setup-endif` (see `evaluateCondition`, e.g. `auth!=none&orm!=none`)
  * - `// @setup-template-only` ... `// @setup-endif`: kept only while the setup tool is kept.
  *
- * Block directives also work with `#` and `<!-- -->` comments. All directives are removed.
+ * `// @setup-emit <text>` outputs `<text>` (usually inside a block), e.g. a Biome suppression.
+ *
+ * Blocks can be nested. They also work with `#` and `<!-- -->` comments. All directives are removed.
  */
 export const processDirectives = (
   content: string,
@@ -85,7 +144,8 @@ export const processDirectives = (
   options: { keepTemplateOnly: boolean } = { keepTemplateOnly: false },
 ): string => {
   const output: string[] = [];
-  let block: { keep: boolean; line: number } | null = null;
+  // Open blocks, innermost last. A line is kept only if every enclosing block keeps it.
+  const blocks: { keep: boolean; line: number }[] = [];
 
   for (const [index, line] of content.split("\n").entries()) {
     const where = `${file}:${index + 1}`;
@@ -94,26 +154,31 @@ export const processDirectives = (
     if (blockMatch) {
       const [, kind, args = ""] = blockMatch;
       if (kind === "endif") {
-        if (!block) throw new Error(`${where}: @setup-endif without @setup-if`);
-        block = null;
+        if (blocks.length === 0) throw new Error(`${where}: @setup-endif without @setup-if`);
+        blocks.pop();
         continue;
       }
-      if (block) throw new Error(`${where}: nested @setup blocks are not supported`);
-      block = {
+      blocks.push({
         keep:
           kind === "template-only"
             ? options.keepTemplateOnly
-            : parseCondition(args, selection, manifest, where),
+            : evaluateCondition(args, selection, manifest, where),
         line: index + 1,
-      };
+      });
       continue;
     }
 
-    if (block && !block.keep) continue;
+    if (blocks.some((open) => !open.keep)) continue;
+
+    const emit = EMIT_DIRECTIVE.exec(line);
+    if (emit) {
+      output.push(`${emit[1] ?? ""}${emit[2] ?? ""}`);
+      continue;
+    }
 
     const lineMatch = LINE_DIRECTIVE.exec(line);
     if (!lineMatch) {
-      if (/@setup-(select|if)\b/.test(line)) throw new Error(`${where}: malformed @setup directive`);
+      if (/@setup-(select|if|emit)\b/.test(line)) throw new Error(`${where}: malformed @setup directive`);
       output.push(line);
       continue;
     }
@@ -123,7 +188,7 @@ export const processDirectives = (
       if (!SINGLE_LINE_STATEMENT.test(code)) {
         throw new Error(`${where}: line-level @setup-if must be on a complete one-line import/export`);
       }
-      if (parseCondition(args, selection, manifest, where)) output.push(code);
+      if (evaluateCondition(args, selection, manifest, where)) output.push(code);
       continue;
     }
 
@@ -140,7 +205,8 @@ export const processDirectives = (
     output.push(code.replace(segment, selected));
   }
 
-  if (block) throw new Error(`${file}:${block.line}: @setup block without @setup-endif`);
+  const unclosed = blocks.at(-1);
+  if (unclosed) throw new Error(`${file}:${unclosed.line}: @setup block without @setup-endif`);
   return output.join("\n");
 };
 
@@ -173,8 +239,20 @@ export const renameReadme = (readme: string, name: string): string => readme.rep
 // Paths, package.json, env
 // ---------------------------------------------------------------------------
 
-/** Paths to delete for a selection. See OptionManifest.paths for the keep rules. */
-export const pathsToRemove = (selection: Record<string, string>, manifest: Features = features): string[] => {
+/** Conditional entries whose `keepWhen` does not match: their paths, scripts, and dependencies go. */
+const droppedConditionals = (
+  selection: Record<string, string>,
+  manifest: Features,
+  conditional: ConditionalManifest[],
+): ConditionalManifest[] =>
+  conditional.filter((entry) => !evaluateCondition(entry.keepWhen, selection, manifest, "CONDITIONAL"));
+
+/** Paths to delete for a selection. See OptionManifest.paths and CONDITIONAL for the keep rules. */
+export const pathsToRemove = (
+  selection: Record<string, string>,
+  manifest: Features = features,
+  conditional: ConditionalManifest[] = CONDITIONAL,
+): string[] => {
   // path -> feature -> set of options that own it
   const owners = new Map<string, Map<string, Set<string>>>();
   for (const [feature, entry] of Object.entries(manifest)) {
@@ -189,12 +267,15 @@ export const pathsToRemove = (selection: Record<string, string>, manifest: Featu
     }
   }
 
-  return [...owners.entries()]
+  const fromOptions = [...owners.entries()]
     .filter(([, byFeature]) =>
       [...byFeature.entries()].some(([feature, options]) => !options.has(selection[feature] ?? "")),
     )
-    .map(([p]) => p)
-    .sort();
+    .map(([p]) => p);
+  const fromConditions = droppedConditionals(selection, manifest, conditional).flatMap(
+    (entry) => entry.paths ?? [],
+  );
+  return [...new Set([...fromOptions, ...fromConditions])].sort();
 };
 
 interface PackageJson {
@@ -209,7 +290,9 @@ export const updatePackageJson = (
   selection: Record<string, string>,
   options: { removeSetup: boolean; projectName?: string | undefined },
   manifest: Features = features,
+  conditional: ConditionalManifest[] = CONDITIONAL,
 ): PackageJson => {
+  const dropped = droppedConditionals(selection, manifest, conditional);
   const selected = Object.entries(manifest).map(
     ([feature, entry]) => entry.options[selection[feature] ?? ""],
   );
@@ -235,6 +318,7 @@ export const updatePackageJson = (
   }
   for (const option of selected) Object.assign(scripts, option?.scripts ?? {});
   if (options.removeSetup) for (const name of SETUP_SCRIPTS) delete scripts[name];
+  for (const name of dropped.flatMap((entry) => entry.scripts ?? [])) delete scripts[name];
 
   // A generated project is its own package, not a copy of the template's metadata
   const { repository: _repository, homepage: _homepage, bugs: _bugs, keywords: _keywords, ...rest } = pkg;
@@ -245,8 +329,14 @@ export const updatePackageJson = (
   return {
     ...identity,
     scripts: Object.fromEntries(Object.entries(scripts).sort(([a], [b]) => a.localeCompare(b))),
-    dependencies: filterDeps("dependencies"),
-    devDependencies: filterDeps("devDependencies", options.removeSetup ? SETUP_DEV_DEPENDENCIES : []),
+    dependencies: filterDeps(
+      "dependencies",
+      dropped.flatMap((entry) => entry.dependencies ?? []),
+    ),
+    devDependencies: filterDeps("devDependencies", [
+      ...(options.removeSetup ? SETUP_DEV_DEPENDENCIES : []),
+      ...dropped.flatMap((entry) => entry.devDependencies ?? []),
+    ]),
   };
 };
 
@@ -327,6 +417,14 @@ export const applySelection = async (
   const pkg = JSON.parse(await readFile(pkgPath, "utf8")) as PackageJson;
   await writeFile(pkgPath, `${JSON.stringify(updatePackageJson(pkg, selection, options), null, 2)}\n`);
   await writeFile(path.join(root, ".env.example"), renderEnvExample(selection));
+
+  // Without a database there are no migrations to run before deploy
+  const railwayPath = path.join(root, "railway.json");
+  if (selection.orm === "none" && existsSync(railwayPath)) {
+    const railway = JSON.parse(await readFile(railwayPath, "utf8")) as { deploy?: Record<string, unknown> };
+    delete railway.deploy?.preDeployCommand;
+    await writeFile(railwayPath, `${JSON.stringify(railway, null, 2)}\n`);
+  }
 
   if (options.projectName) {
     const readmePath = path.join(root, "README.md");

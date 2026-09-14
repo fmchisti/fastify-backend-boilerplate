@@ -1,8 +1,13 @@
 # Providers
 
-Auth, ORM, storage, and Redis each sit behind one interface. Routes and services never import a vendor SDK.
+Auth, database, storage, and Redis each sit behind one interface, and each is optional. Routes and services never import a vendor SDK.
 
 ## Auth
+<!-- @setup-if auth=none -->
+
+This project has **no auth provider**: all routes are public. To add one later, copy a provider from [Fastra](https://github.com/fmchisti/fastra) (`src/auth/`, `src/modules/me/`, the middleware wiring in `src/app.ts` and `src/container.ts`, and `test/fakes/auth.ts`), or create a new project with auth and port your modules.
+<!-- @setup-endif -->
+<!-- @setup-if auth!=none -->
 
 Contract: `src/auth/types.ts`
 
@@ -70,8 +75,14 @@ Verifies Logto access tokens issued for an API resource, using the tenant JWKS (
 <!-- @setup-endif -->
 
 The same pattern applies to storage (`src/storage/index.ts`, `createStorage`).
+<!-- @setup-endif -->
 
-## ORM
+## Database
+<!-- @setup-if orm=none -->
+
+This project has **no database**. Keep state in the services you call, or add Redis for caching. To add a database later, create a Fastra project with the ORM you want and port `src/db/`, `drizzle.config.ts` or `prisma/`, the container wiring, and the database scripts.
+<!-- @setup-endif -->
+<!-- @setup-if orm!=none -->
 
 Contract: `src/db/types.ts` (`Database` with `client`, `ping`, `close`) plus one repository interface per module.
 
@@ -90,7 +101,10 @@ Contract: `src/db/types.ts` (`Database` with `client`, `ping`, `close`) plus one
 - Uses the `@prisma/adapter-pg` driver adapter (node-postgres).
 <!-- @setup-endif -->
 
-Repositories are tested by contract suites against every implementation on an in-process Postgres (PGlite): `todo-repository.contract.ts` for todos, and the shared `crud-contract.ts` that `pnpm gen:module` uses.
+- Env: `DATABASE_URL`, optional `DATABASE_POOL_MAX` (validated in `src/db/env.ts` when the database is created).
+
+Repositories are tested by contract suites against every implementation on an in-process Postgres (PGlite), including the shared `crud-contract.ts` that `pnpm gen:module` uses.
+<!-- @setup-endif -->
 
 ## Storage
 

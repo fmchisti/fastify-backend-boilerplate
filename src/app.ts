@@ -15,8 +15,8 @@ import { errorHandler, HttpError, notFoundHandler } from "./lib/errors.ts";
 import { generateRequestId, REQUEST_ID_HEADER } from "./lib/request-id.ts";
 import fileRoutes from "./modules/files/routes.ts"; // @setup-if storage=s3,local
 import healthRoutes from "./modules/health/routes.ts";
-import meRoutes from "./modules/me/routes.ts";
-import todoRoutes from "./modules/todos/routes.ts";
+import meRoutes from "./modules/me/routes.ts"; // @setup-if auth!=none
+import todoRoutes from "./modules/todos/routes.ts"; // @setup-if auth!=none&orm!=none
 
 const DEV_ORIGINS = ["http://localhost:3000", "http://localhost:5173"];
 
@@ -50,8 +50,10 @@ export const buildApp = async (
   app.setSerializerCompiler(serializerCompiler);
   app.setErrorHandler(errorHandler);
   app.setNotFoundHandler(notFoundHandler);
+  // @setup-if auth!=none
   app.decorate("auth", deps.auth);
   app.decorateRequest("user", null);
+  // @setup-endif
 
   app.addHook("onRequest", async (request, reply) => {
     reply.header(REQUEST_ID_HEADER, request.id);
@@ -66,13 +68,7 @@ export const buildApp = async (
   app.addHook("onSend", async (_request, reply) => {
     if (closing) reply.header("connection", "close");
   });
-  app.addHook("onClose", async () => {
-    await deps.auth.close?.();
-    await deps.database.close();
-    // @setup-if redis=redis
-    await deps.redis.quit();
-    // @setup-endif
-  });
+  app.addHook("onClose", () => deps.close());
 
   await app.register(fastifyHelmet, {
     // The JSON API needs no CSP; Swagger UI sets its own on its routes
@@ -106,13 +102,17 @@ export const buildApp = async (
     await app.register(fastifySwaggerUi, createSwaggerUiOptions(env));
   }
 
+  // @setup-if auth!=none
   if (deps.auth.routes) {
     await app.register(deps.auth.routes, { prefix: "/api/auth" });
   }
+  // @setup-endif
   await app.register(healthRoutes, {
     prefix: "/api",
     checks: {
+      // @setup-if orm!=none
       database: () => deps.database.ping(),
+      // @setup-endif
       // @setup-if redis=redis
       redis: async () => {
         await deps.redis.ping();
@@ -120,9 +120,15 @@ export const buildApp = async (
       // @setup-endif
     },
   });
+  // @setup-if auth!=none
   await app.register(meRoutes, { prefix: "/api" });
+  // @setup-endif
+  // @setup-if auth!=none&orm!=none
   await app.register(todoRoutes, { prefix: "/api", repository: deps.todos });
+  // @setup-endif
+  // @setup-if orm!=none
   // @gen:routes
+  // @setup-endif
   // @setup-if storage=s3,local
   await app.register(fileRoutes, { prefix: "/api", storage: deps.storage });
   // @setup-endif

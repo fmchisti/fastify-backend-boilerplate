@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { parseEnv } from "../src/config/env.ts";
+import { loadDatabaseEnv } from "../src/db/env.ts"; // @setup-if orm!=none
 
-const validEnv = {
-  DATABASE_URL: "postgresql://u:p@localhost:5432/db",
-};
+const validEnv = {};
 
 describe("parseEnv", () => {
   it("applies defaults and coerces numbers", () => {
@@ -18,13 +17,13 @@ describe("parseEnv", () => {
     expect(parseEnv({ ...validEnv, PORT: "8080" }).PORT).toBe(8080);
   });
 
-  it("does not require any auth or storage provider variables", () => {
+  it("does not require database, auth, or storage variables", () => {
     expect(() => parseEnv(validEnv)).not.toThrow();
   });
 
   it("lists every invalid variable in the error", () => {
-    expect(() => parseEnv({ ...validEnv, DATABASE_URL: "nope", PORT: "abc" })).toThrow(
-      /DATABASE_URL[\s\S]*PORT|PORT[\s\S]*DATABASE_URL/,
+    expect(() => parseEnv({ ...validEnv, CORS_ORIGINS: "nope", PORT: "abc" })).toThrow(
+      /CORS_ORIGINS[\s\S]*PORT|PORT[\s\S]*CORS_ORIGINS/,
     );
   });
 
@@ -54,3 +53,16 @@ describe("parseEnv", () => {
     expect(parseEnv({ ...validEnv, NODE_ENV: "production", DOCS_ENABLED: "true" }).DOCS_ENABLED).toBe(true);
   });
 });
+
+// @setup-if orm!=none
+describe("loadDatabaseEnv", () => {
+  it("requires a valid DATABASE_URL and defaults the pool size", () => {
+    expect(loadDatabaseEnv({ DATABASE_URL: "postgresql://u:p@localhost:5432/db" })).toEqual({
+      DATABASE_URL: "postgresql://u:p@localhost:5432/db",
+      DATABASE_POOL_MAX: 10,
+    });
+    expect(() => loadDatabaseEnv({})).toThrow(/DATABASE_URL/);
+    expect(() => loadDatabaseEnv({ DATABASE_URL: "nope" })).toThrow(/DATABASE_URL/);
+  });
+});
+// @setup-endif

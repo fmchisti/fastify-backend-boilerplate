@@ -82,10 +82,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { orm: drizzle, redis: none }
-          - { orm: prisma, redis: redis }
+          - { auth: better-auth, orm: drizzle, storage: local, redis: none }
+          - { auth: better-auth, orm: prisma, storage: local, redis: redis }
+          # File storage needs auth, so the API-only project has none
+          - { auth: none, orm: none, storage: none, redis: none }
     # @setup-endif
+    # @setup-if orm!=none|redis=redis
     services:
+      # @setup-if orm!=none
       postgres:
         image: postgres:18-alpine
         env:
@@ -96,6 +100,7 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U postgres -d app"
           --health-interval 5s --health-timeout 5s --health-retries 10
+      # @setup-endif
       # @setup-if redis=redis
       redis:
         image: redis:8-alpine
@@ -104,8 +109,11 @@ jobs:
           --health-cmd "redis-cli ping"
           --health-interval 5s --health-timeout 3s --health-retries 10
       # @setup-endif
+    # @setup-endif
+    # @setup-if orm!=none
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app
+    # @setup-endif
     steps:
       - uses: actions/checkout@v7
       # @setup-template-only
@@ -118,14 +126,16 @@ jobs:
       - name: Configure a project from the template
         run: |
           git config user.email ci@example.com && git config user.name CI
-          pnpm setup:project --auth better-auth --orm ${{ matrix.orm }} --storage local --redis ${{ matrix.redis }} --deploy none --yes --force
+          pnpm setup:project --auth ${{ matrix.auth }} --orm ${{ matrix.orm }} --storage ${{ matrix.storage }} --redis ${{ matrix.redis }} --deploy none --yes --force
       # @setup-endif
       - name: Build image
         run: docker build -t api .
       - name: Write runtime env
         run: |
           {
+            # @setup-if orm!=none
             echo "DATABASE_URL=$DATABASE_URL"
+            # @setup-endif
             echo "LOG_LEVEL=info"
             # Placeholder provider config: enough to boot, no external calls at startup
             # @setup-if auth=better-auth
@@ -151,8 +161,13 @@ jobs:
             echo "S3_REGION=us-east-1"
             # @setup-endif
           } > ci.env
+      # @setup-if orm!=none
       - name: Run migrations in the image
+        # @setup-template-only
+        if: matrix.orm != 'none'
+        # @setup-endif
         run: docker run --rm --network host --env-file ci.env api pnpm db:migrate:deploy
+      # @setup-endif
       - name: Start container and check readiness
         run: |
           docker run -d --name api --network host --env-file ci.env api
@@ -163,6 +178,9 @@ jobs:
           curl -fsS http://localhost:3000/api/health/ready
       # @setup-if auth=better-auth
       - name: Exercise the API
+        # @setup-template-only
+        if: matrix.auth == 'better-auth'
+        # @setup-endif
         run: |
           curl -fsS -D headers.txt -o /dev/null -H 'content-type: application/json' \
             -d '{"email":"ci@example.com","password":"correct-horse-battery","name":"CI"}' \

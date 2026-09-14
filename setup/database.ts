@@ -14,7 +14,8 @@ export type Runner = (
 
 /** Runs a command and only surfaces output when it fails. */
 export const quietRunner: Runner = async (command, args, options) => {
-  await execFileAsync(command, args, options);
+  // A tool waiting for interactive input would otherwise hang forever
+  await execFileAsync(command, args, { ...options, timeout: 300_000 });
 };
 
 /**
@@ -27,6 +28,7 @@ export const regenerateDatabaseArtifacts = async (
   orm: Selection["orm"],
   run: Runner = quietRunner,
 ): Promise<void> => {
+  if (orm === "none") return;
   const env = { ...process.env, DATABASE_URL: "postgresql://setup:setup@localhost:5432/setup" };
 
   if (orm === "drizzle") {
@@ -61,4 +63,22 @@ export const regenerateDatabaseArtifacts = async (
 /** Format and organize imports after directives removed code, so the new project starts lint-clean. */
 export const formatProject = async (cwd: string, run: Runner = quietRunner): Promise<void> => {
   await run("pnpm", ["exec", "biome", "check", "--write", "."], { cwd, env: process.env });
+};
+
+/**
+ * A database without auth has no example table (todos is user-owned), so create a public
+ * `notes` module with the generator. Call after `regenerateDatabaseArtifacts`: the generator
+ * then adds its migration on top of the clean initial state (no rename prompts).
+ */
+export const createExampleModule = async (
+  cwd: string,
+  selection: Pick<Selection, "auth" | "orm">,
+  run: Runner = quietRunner,
+): Promise<boolean> => {
+  if (selection.orm === "none" || selection.auth !== "none") return false;
+  await run("pnpm", ["exec", "tsx", "scripts/gen-module.ts", "note", "--fields", "title:string body:text?"], {
+    cwd,
+    env: process.env,
+  });
+  return true;
 };

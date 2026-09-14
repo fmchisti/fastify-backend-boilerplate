@@ -14,6 +14,17 @@ export interface CrudRepository<TEntity, TCreate, TUpdate> {
   delete(userId: string, id: string): Promise<boolean>;
 }
 
+/** Standard data access for a public resource (not owned by a user). */
+export interface PublicCrudRepository<TEntity, TCreate, TUpdate> {
+  list(query: PaginationQuery): Promise<Page<TEntity>>;
+  findById(id: string): Promise<TEntity | null>;
+  create(input: TCreate): Promise<TEntity>;
+  /** Returns `null` when the record does not exist. */
+  update(id: string, input: TUpdate): Promise<TEntity | null>;
+  /** Returns `false` when the record does not exist. */
+  delete(id: string): Promise<boolean>;
+}
+
 type Defined<T> = { [K in keyof T]?: Exclude<T[K], undefined> };
 
 /** Drops keys whose value is `undefined`, so partial updates only touch provided fields. */

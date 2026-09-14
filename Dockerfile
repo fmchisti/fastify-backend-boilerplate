@@ -1,6 +1,8 @@
 # syntax=docker/dockerfile:1
 # Production image. Build: docker build -t api .
+# @setup-if orm!=none
 # Migrate:  docker run --rm --env-file .env api pnpm db:migrate:deploy
+# @setup-endif
 # Run:      docker run --env-file .env -p 3000:3000 api
 
 FROM node:22-alpine AS base

@@ -10,16 +10,18 @@ import * as t from "./gen/templates.ts";
 const exec = promisify(execFile);
 
 const HELP = `
-Scaffold a user-owned CRUD module (routes, schema, service, repository, table, migration, tests).
+Scaffold a CRUD module (routes, schema, service, repository, table, migration, tests).
 
 Usage:
-  pnpm gen:module <name> --fields "<field:type[?]> ..." [--plural <name>] [--dry-run]
+  pnpm gen:module <name> --fields "<field:type[?]> ..." [--plural <name>] [--public] [--dry-run]
 
 Example:
   pnpm gen:module product --fields "name:string price:float stock:int description:text? releasedAt:datetime?"
 
 Types: string (≤255), text, int, float, boolean, datetime. Add ? for optional (nullable).
-Adds: id, userId, createdAt, updatedAt. Routes: /api/<plural> (GET, POST, GET/:id, PATCH/:id, DELETE/:id).
+Adds: id, createdAt, updatedAt, and userId when the project has auth (records are scoped to their owner
+and routes require sign-in). --public, or a project without auth, creates a public resource instead.
+Routes: /api/<plural> (GET, POST, GET/:id, PATCH/:id, DELETE/:id).
 `;
 
 type Orm = "drizzle" | "prisma";
@@ -58,8 +60,8 @@ interface FileWrite {
   content: string;
 }
 
-export const planModule = (names: ModuleNames, fields: Field[], orm: Orm): FileWrite[] => {
-  const context = { names, fields };
+export const planModule = (names: ModuleNames, fields: Field[], orm: Orm, owned = true): FileWrite[] => {
+  const context = { names, fields, owned };
   const moduleDir = `src/modules/${names.plural.kebab}`;
   return [
     { path: `${moduleDir}/schema.ts`, content: t.schemaTemplate(context) },
@@ -156,7 +158,13 @@ const run = async (command: string, args: string[], cwd: string) => {
     ...process.env,
     DATABASE_URL: process.env.DATABASE_URL ?? "postgresql://gen:gen@localhost:5432/gen",
   };
-  await exec(command, args, { cwd, env });
+  // Fail instead of hanging if a tool waits for input (e.g. drizzle-kit asking about renames)
+  await exec(command, args, { cwd, env, timeout: 120_000 }).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `${command} ${args.join(" ")} failed or timed out. Run it yourself to answer any prompts.\n${message}`,
+    );
+  });
 };
 
 /** Creates a migration for the new table without connecting to a database. */
@@ -201,6 +209,8 @@ export interface GenerateOptions {
   fields: string;
   plural?: string | undefined;
   dryRun?: boolean;
+  /** Generate a public resource even when the project has auth. */
+  public?: boolean;
   /** Skip migration and formatting (unit tests). */
   skipTooling?: boolean;
 }
@@ -210,7 +220,10 @@ export const generateModule = async (options: GenerateOptions): Promise<string[]
   const names = parseModuleName(options.name, options.plural);
   const fields = parseFields(options.fields);
   const orm = await detectOrm(root);
-  const files = planModule(names, fields, orm);
+  // Without auth there are no users to own records, so modules are public
+  const hasAuth = existsSync(path.join(root, "src/auth/index.ts"));
+  const owned = hasAuth && options.public !== true;
+  const files = planModule(names, fields, orm, owned);
 
   const conflicts = files.filter((file) => existsSync(path.join(root, file.path)));
   if (conflicts.length > 0) {
@@ -248,6 +261,7 @@ const main = async () => {
       fields: { type: "string", default: "name:string" },
       plural: { type: "string" },
       "dry-run": { type: "boolean", default: false },
+      public: { type: "boolean", default: false },
       help: { type: "boolean", default: false },
     },
   });
@@ -263,6 +277,7 @@ const main = async () => {
     fields: values.fields,
     plural: values.plural,
     dryRun: values["dry-run"],
+    public: values.public,
   });
 
   const names = parseModuleName(name, values.plural);

@@ -4,7 +4,7 @@
  * Adding a new provider (e.g. Clerk auth, GCS storage):
  * 1. Implement the interface under src/<area>/providers/<id>/ with a `create*` factory.
  * 2. Add an option below listing its paths, dependencies, and env vars.
- * 3. Run `pnpm setup:verify` to type-check and test every combination.
+ * 3. Run `pnpm setup:verify` to type-check and test every valid combination.
  */
 
 export interface EnvEntry {
@@ -28,6 +28,23 @@ export interface OptionManifest {
   env?: EnvEntry[];
   /** Printed after setup. */
   nextSteps?: string[];
+  /**
+   * Other features this option depends on: `{ orm: ["drizzle", "prisma"] }` means the option
+   * can only be selected together with one of those ORMs. Setup hides incompatible options.
+   */
+  requires?: Record<string, string[]>;
+}
+
+/**
+ * Things that depend on a combination of features rather than one option, kept only when
+ * `keepWhen` matches the selection (same condition syntax as `@setup-if`, e.g. `auth!=none&orm!=none`).
+ */
+export interface ConditionalManifest {
+  keepWhen: string;
+  paths?: string[];
+  scripts?: string[];
+  dependencies?: string[];
+  devDependencies?: string[];
 }
 
 export interface FeatureManifest {
@@ -35,6 +52,20 @@ export interface FeatureManifest {
   default: string;
   options: Record<string, OptionManifest>;
 }
+
+const AUTH_PROVIDERS = ["better-auth", "supabase", "firebase", "logto"];
+const ORMS = ["drizzle", "prisma"];
+
+const databaseEnv: EnvEntry[] = [
+  {
+    key: "DATABASE_URL",
+    example: "postgresql://postgres:postgres@localhost:5432/app",
+    comment:
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Railway reference variable syntax
+      "Docker: pnpm db:up. Railway: ${{Postgres.DATABASE_URL}}. Supabase: Project Settings > Database > Connection string",
+  },
+  { key: "DATABASE_POOL_MAX", example: "10", comment: "Max DB connections per instance" },
+];
 
 const files = {
   paths: ["src/storage", "src/modules/files", "test/files.test.ts", "test/fakes/storage.ts"],
@@ -57,6 +88,7 @@ export const features = {
       "better-auth": {
         label: "Better Auth",
         hint: "self-hosted: users & sessions in your Postgres, email/password + social",
+        requires: { orm: ORMS },
         paths: [
           "src/auth/providers/better-auth",
           "src/db/drizzle/schema/auth.ts",
@@ -114,11 +146,15 @@ export const features = {
         ],
         nextSteps: ["Create an API resource in Logto and request tokens for it from your client"],
       },
+      none: {
+        label: "None",
+        hint: "public API without user accounts",
+      },
     },
   },
 
   orm: {
-    label: "ORM",
+    label: "Database (ORM)",
     default: "drizzle",
     options: {
       drizzle: {
@@ -136,6 +172,7 @@ export const features = {
         ],
         dependencies: ["drizzle-orm"],
         devDependencies: ["drizzle-kit"],
+        env: databaseEnv,
         scripts: {
           "db:generate": "drizzle-kit generate",
           "db:migrate": "drizzle-kit migrate",
@@ -161,6 +198,7 @@ export const features = {
         ],
         // prisma CLI is a runtime dependency so `migrate deploy` works in production images
         dependencies: ["@prisma/client", "@prisma/adapter-pg", "prisma"],
+        env: databaseEnv,
         scripts: {
           postinstall: "prisma generate",
           "db:generate": "prisma generate",
@@ -171,6 +209,10 @@ export const features = {
         },
         nextSteps: ["Schema: prisma/schema. After changes: pnpm db:migrate (creates migration + client)"],
       },
+      none: {
+        label: "None",
+        hint: "no database, e.g. an API that only calls other services",
+      },
     },
   },
 
@@ -180,7 +222,8 @@ export const features = {
     options: {
       s3: {
         label: "S3-compatible",
-        hint: "AWS S3, Cloudflare R2, MinIO, Railway Buckets",
+        hint: "AWS S3, Cloudflare R2, MinIO, Railway Buckets (needs auth: files belong to users)",
+        requires: { auth: AUTH_PROVIDERS },
         paths: [...files.paths, "src/storage/providers/s3", "test/storage/s3.test.ts"],
         dependencies: [
           ...files.dependencies,
@@ -210,7 +253,8 @@ export const features = {
       },
       local: {
         label: "Local disk",
-        hint: "development / single server; no presigned URLs",
+        hint: "development / single server; no presigned URLs (needs auth)",
+        requires: { auth: AUTH_PROVIDERS },
         paths: [...files.paths, "src/storage/providers/local", "test/storage/local.test.ts"],
         dependencies: [...files.dependencies],
         env: [{ key: "LOCAL_STORAGE_DIR", example: "./uploads" }, ...files.env],
@@ -280,6 +324,50 @@ export const SETUP_PATHS = ["setup", "test/setup", "docs/template.md", "packages
 export const SETUP_DEV_DEPENDENCIES = ["@clack/prompts", "tinyglobby", "giget"];
 export const SETUP_SCRIPTS = ["setup:project", "setup:verify", "build:create"];
 
+/** Kept or removed based on combinations of features. */
+export const CONDITIONAL: ConditionalManifest[] = [
+  {
+    keepWhen: "auth!=none",
+    paths: ["src/auth", "src/modules/me", "test/me.test.ts", "test/fakes/auth.ts"],
+  },
+  {
+    keepWhen: "orm!=none",
+    paths: [
+      "src/db",
+      "test/fakes/database.ts",
+      "test/postgres.ts",
+      "scripts",
+      "test/scripts",
+      "src/lib/crud.ts",
+      "test/repositories/crud-contract.ts",
+    ],
+    scripts: ["gen:module"],
+    dependencies: ["pg"],
+    devDependencies: ["@types/pg", "@electric-sql/pglite", "@electric-sql/pglite-socket"],
+  },
+  {
+    // The todos example is user-owned data: it needs both auth and a database
+    keepWhen: "auth!=none&orm!=none",
+    paths: [
+      "src/modules/todos",
+      "src/db/drizzle/schema/todos.ts",
+      "prisma/schema/todos.prisma",
+      "test/todos.test.ts",
+      "test/fakes/todo-repository.ts",
+      "test/repositories/todo-repository.contract.ts",
+      "test/repositories/todos.memory.test.ts",
+      "test/repositories/todos.drizzle.test.ts",
+      "test/repositories/todos.prisma.test.ts",
+    ],
+  },
+  {
+    // Docker Compose only runs local Postgres, Redis, and MinIO
+    keepWhen: "orm!=none|redis!=none|storage=s3",
+    paths: ["docker-compose.yml"],
+    scripts: ["db:up", "db:down"],
+  },
+];
+
 export const CORE_ENV: EnvEntry[] = [
   { key: "NODE_ENV", example: "development" },
   { key: "PORT", example: "3000" },
@@ -300,14 +388,6 @@ export const CORE_ENV: EnvEntry[] = [
     example: "false",
     comment: "true behind a reverse proxy/load balancer (Railway, Render, Fly), so client IPs are real",
   },
-  {
-    key: "DATABASE_URL",
-    example: "postgresql://postgres:postgres@localhost:5432/app",
-    comment:
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: Railway reference variable syntax
-      "Docker: pnpm db:up. Railway: ${{Postgres.DATABASE_URL}}. Supabase: Project Settings > Database > Connection string",
-  },
-  { key: "DATABASE_POOL_MAX", example: "10", comment: "Max DB connections per instance" },
   {
     key: "RATE_LIMIT_MAX",
     example: "300",

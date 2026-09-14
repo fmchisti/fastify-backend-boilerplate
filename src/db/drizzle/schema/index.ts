@@ -1,3 +1,3 @@
 // Every table the app uses. drizzle.config.ts and the Drizzle client read this file.
 export * from "./auth.ts"; // @setup-if auth=better-auth
-export * from "./todos.ts";
+export * from "./todos.ts"; // @setup-if auth!=none&orm!=none

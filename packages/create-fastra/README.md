@@ -6,7 +6,7 @@ Create a type-safe Fastify + TypeScript API from [Fastra](https://github.com/fmc
 pnpm create fastra shop-api
 ```
 
-It downloads the template, installs dependencies, runs Fastra's setup (you choose auth, ORM, storage, Redis, and deploy target; everything else is deleted), and creates a git repository with an initial commit.
+It downloads the template, installs dependencies, runs Fastra's setup (you choose auth, database, storage, Redis, and deploy target, each optional; everything else is deleted), and creates a git repository with an initial commit.
 
 Non-interactive:
 
@@ -14,12 +14,18 @@ Non-interactive:
 pnpm create fastra shop-api --auth logto --orm prisma --storage s3 --redis redis --deploy railway --yes
 ```
 
+An API with no database and no auth (for example a gateway to other services):
+
+```bash
+pnpm create fastra gateway --auth none --orm none --storage none --redis none --deploy none --yes
+```
+
 | Option | Values |
 |---|---|
 | `--name` | package name (default: directory name) |
-| `--auth` | `better-auth` · `supabase` · `firebase` · `logto` |
-| `--orm` | `drizzle` · `prisma` |
-| `--storage` | `s3` · `local` · `none` |
+| `--auth` | `better-auth` (needs a database) · `supabase` · `firebase` · `logto` · `none` |
+| `--orm` | `drizzle` · `prisma` · `none` |
+| `--storage` | `s3` · `local` · `none` (uploads need auth) |
 | `--redis` | `none` · `redis` |
 | `--deploy` | `railway` · `none` |
 | `--yes` | use defaults for anything not passed |
