@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { APP_NAME, APP_VERSION } from "../src/config/app-info.ts";
 import { HealthCheckResponseSchema } from "../src/modules/health/schema.ts";
 import { createFakeDatabase } from "./fakes/database.ts";
 import { useTestApp } from "./helpers.ts";
@@ -49,6 +50,6 @@ describe("GET /", () => {
     const response = await app().inject({ method: "GET", url: "/" });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ name: "fastify-backend-boilerplate", version: "1.0.0" });
+    expect(response.json()).toEqual({ name: APP_NAME, version: APP_VERSION });
   });
 });

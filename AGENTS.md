@@ -197,7 +197,7 @@ pnpm check:fix && pnpm type-check && pnpm test
 - [README.md](./README.md): setup, scripts, production, deployment
 - [docs/providers.md](./docs/providers.md): auth, ORM, storage, Redis, and adding a provider
 <!-- @setup-template-only -->
-- [docs/template.md](./docs/template.md): maintaining the boilerplate itself (setup CLI, directives, verify matrix)
+- [docs/template.md](./docs/template.md): maintaining Fastra itself (setup CLI, directives, verify matrix)
 <!-- @setup-endif -->
 <!-- @setup-if deploy=railway -->
 - `railway.json`: runs `pnpm db:migrate:deploy` before deploy and health-checks `/api/health/ready`

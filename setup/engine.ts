@@ -145,6 +145,31 @@ export const processDirectives = (
 };
 
 // ---------------------------------------------------------------------------
+// Project name
+// ---------------------------------------------------------------------------
+
+const NPM_NAME = /^(?:@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
+
+/** Validates an npm package name (lowercase, URL-safe, ≤214 chars). */
+export const validateProjectName = (name: string): void => {
+  if (name.length === 0 || name.length > 214 || !NPM_NAME.test(name)) {
+    throw new Error(
+      `Invalid project name "${name}". Use lowercase letters, numbers, "-", "." or "_" (e.g. shop-api).`,
+    );
+  }
+};
+
+/** Turns a folder name like "My Shop API" into a valid package name ("my-shop-api"). */
+export const toProjectName = (folder: string): string =>
+  folder
+    .toLowerCase()
+    .replace(/[^a-z0-9-._~]+/g, "-")
+    .replace(/^[-._~]+|[-._~]+$/g, "") || "my-api";
+
+/** Replaces the first `# Heading` of a README with the project name. */
+export const renameReadme = (readme: string, name: string): string => readme.replace(/^# .*$/m, `# ${name}`);
+
+// ---------------------------------------------------------------------------
 // Paths, package.json, env
 // ---------------------------------------------------------------------------
 
@@ -182,7 +207,7 @@ interface PackageJson {
 export const updatePackageJson = (
   pkg: PackageJson,
   selection: Record<string, string>,
-  options: { removeSetup: boolean },
+  options: { removeSetup: boolean; projectName?: string | undefined },
   manifest: Features = features,
 ): PackageJson => {
   const selected = Object.entries(manifest).map(
@@ -211,8 +236,14 @@ export const updatePackageJson = (
   for (const option of selected) Object.assign(scripts, option?.scripts ?? {});
   if (options.removeSetup) for (const name of SETUP_SCRIPTS) delete scripts[name];
 
+  // A generated project is its own package, not a copy of the template's metadata
+  const { repository: _repository, homepage: _homepage, bugs: _bugs, keywords: _keywords, ...rest } = pkg;
+  const identity = options.projectName
+    ? { ...rest, name: options.projectName, version: "0.1.0", description: "" }
+    : pkg;
+
   return {
-    ...pkg,
+    ...identity,
     scripts: Object.fromEntries(Object.entries(scripts).sort(([a], [b]) => a.localeCompare(b))),
     dependencies: filterDeps("dependencies"),
     devDependencies: filterDeps("devDependencies", options.removeSetup ? SETUP_DEV_DEPENDENCIES : []),
@@ -249,6 +280,8 @@ const IGNORE_GLOBS = ["**/node_modules/**", "**/dist/**", "src/generated/**", ".
 
 export interface ApplyOptions {
   removeSetup: boolean;
+  /** npm package name for the new project; also used as the README title. */
+  projectName?: string | undefined;
 }
 
 export interface ApplyResult {
@@ -262,6 +295,7 @@ export const applySelection = async (
   options: ApplyOptions,
 ): Promise<ApplyResult> => {
   validateSelection(selection);
+  if (options.projectName !== undefined) validateProjectName(options.projectName);
   const root = path.resolve(rootDir);
 
   // 1. Delete paths owned by unselected options (and the setup tool itself)
@@ -293,6 +327,11 @@ export const applySelection = async (
   const pkg = JSON.parse(await readFile(pkgPath, "utf8")) as PackageJson;
   await writeFile(pkgPath, `${JSON.stringify(updatePackageJson(pkg, selection, options), null, 2)}\n`);
   await writeFile(path.join(root, ".env.example"), renderEnvExample(selection));
+
+  if (options.projectName) {
+    const readmePath = path.join(root, "README.md");
+    await writeFile(readmePath, renameReadme(await readFile(readmePath, "utf8"), options.projectName));
+  }
 
   return { removed, updatedFiles };
 };

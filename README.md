@@ -1,8 +1,8 @@
-# Fastify Backend Boilerplate
+# Fastra
 
 Type-safe Fastify + TypeScript API.
 <!-- @setup-template-only -->
-Pick your auth provider, ORM, file storage and deploy target once, and the setup CLI deletes everything you did not choose.
+**Fastra** is a starter for production APIs. Pick your auth provider, ORM, file storage, Redis, and deploy target once, and the setup CLI deletes everything you did not choose.
 <!-- @setup-endif -->
 
 ## Stack
@@ -54,36 +54,39 @@ Pick your auth provider, ORM, file storage and deploy target once, and the setup
 <!-- @setup-template-only -->
 ## Start a new project
 
-This repository is a GitHub template.
+Pick one way to get a copy. Each starts with a clean git history, not linked to Fastra.
 
-1. Create your repository from the template, either:
-   - on GitHub: **Use this template** → **Create a new repository**, then `git clone` it, or
-   - from a terminal (creates and clones in one step):
-     ```bash
-     gh repo create my-api --template fmchisti/fastify-backend-boilerplate --private --clone
-     ```
-
-   The new repository starts with a clean history and is not linked to this one.
-2. Install and choose your providers:
-   ```bash
-   cd my-api
-   pnpm install
-   pnpm setup:project
-   ```
-3. Commit the result:
-   ```bash
-   git add -A && git commit -m "chore: configure project" && git push
-   ```
-
-Run setup in the new repository, never in this template itself: it deletes the providers you did not choose. It also refuses to run while git has uncommitted changes.
-
-`setup:project` asks five questions, then removes unselected providers (code, tests, dependencies, env vars), regenerates the initial migration, and type-checks. Non-interactive:
+**With pnpm only** (no GitHub step):
 
 ```bash
-pnpm setup:project --auth logto --orm prisma --storage s3 --redis redis --deploy railway --yes
+pnpm dlx giget@latest gh:fmchisti/fastra my-api
+cd my-api
+pnpm install
+pnpm setup:project
+git init && git add -A && git commit -m "chore: initial project"
 ```
 
-Projects created from the template do not receive later template changes automatically. To pick up a fix, create a fresh project from the template with the same options and port the changed files.
+Run `setup:project` before `git init`: setup refuses to run while git has uncommitted changes.
+
+**With GitHub** (creates the repository too), using **Use this template** on GitHub, or:
+
+```bash
+gh repo create my-api --template fmchisti/fastra --private --clone
+cd my-api
+pnpm install
+pnpm setup:project
+git add -A && git commit -m "chore: configure project" && git push
+```
+
+`setup:project` asks for the project name and five choices, then removes unselected providers (code, tests, dependencies, env vars), regenerates the initial migration, formats, and type-checks. Non-interactive:
+
+```bash
+pnpm setup:project --name shop-api --auth logto --orm prisma --storage s3 --redis redis --deploy railway --yes
+```
+
+Run setup in the new project, never in the Fastra repository itself: it deletes the providers you did not choose.
+
+Projects do not receive later Fastra changes automatically. To pick up a fix, create a fresh project with the same options and port the changed files.
 
 <!-- @setup-endif -->
 ## Getting started
@@ -209,5 +212,5 @@ Multi-stage image on `node:22-alpine`, production dependencies only, runs as the
 - [AGENTS.md](./AGENTS.md): rules and workflow for humans and AI agents
 - [docs/providers.md](./docs/providers.md): auth, ORM, storage, and Redis details, and how to add a provider
 <!-- @setup-template-only -->
-- [docs/template.md](./docs/template.md): maintaining this boilerplate (setup CLI, directives, verify matrix)
+- [docs/template.md](./docs/template.md): maintaining Fastra (setup CLI, directives, verify matrix)
 <!-- @setup-endif -->

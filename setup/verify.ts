@@ -57,7 +57,7 @@ interface Result {
 
 const verify = async (selection: Selection): Promise<Result> => {
   const name = nameOf(selection);
-  const dir = await mkdtemp(path.join(tmpdir(), `boilerplate-${name.replaceAll("+", "_")}-`));
+  const dir = await mkdtemp(path.join(tmpdir(), `fastra-${name.replaceAll("+", "_")}-`));
   const started = Date.now();
   const seconds = () => (Date.now() - started) / 1000;
 
@@ -66,7 +66,7 @@ const verify = async (selection: Selection): Promise<Result> => {
     // Reuse installed packages: a selection only ever needs a subset of them
     await symlink(path.join(root, "node_modules"), path.join(dir, "node_modules"), "dir");
 
-    await applySelection(dir, selection, { removeSetup: true });
+    await applySelection(dir, selection, { removeSetup: true, projectName: "verify-app" });
     await regenerateDatabaseArtifacts(dir, selection.orm);
     await formatProject(dir);
     // The module generator must produce working code for every selection

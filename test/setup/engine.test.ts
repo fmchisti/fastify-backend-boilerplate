@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   pathsToRemove,
   processDirectives,
+  renameReadme,
   renderEnvExample,
+  toProjectName,
   updatePackageJson,
+  validateProjectName,
   validateSelection,
 } from "../../setup/engine.ts";
 import { type FeatureManifest, features } from "../../setup/features.ts";
@@ -184,6 +187,63 @@ describe("updatePackageJson", () => {
       "db:generate": "x generate",
     });
     expect(result.devDependencies).toHaveProperty("@clack/prompts");
+  });
+});
+
+describe("project name", () => {
+  it("derives a valid package name from a folder name", () => {
+    expect(toProjectName("My Shop API")).toBe("my-shop-api");
+    expect(toProjectName("--weird__name--")).toBe("weird__name");
+    expect(toProjectName("###")).toBe("my-api");
+  });
+
+  it.each(["shop-api", "@acme/shop-api", "api.v2"])("accepts %s", (name) => {
+    expect(() => validateProjectName(name)).not.toThrow();
+  });
+
+  it.each(["", "Shop", "shop api", ".hidden", "a/b", "x".repeat(215)])("rejects %j", (name) => {
+    expect(() => validateProjectName(name)).toThrow(/Invalid project name/);
+  });
+
+  it("renames the package and drops template metadata", () => {
+    const pkg = {
+      name: "fastra",
+      version: "1.0.0",
+      description: "template",
+      repository: { url: "git+https://github.com/fmchisti/fastra.git" },
+      homepage: "https://github.com/fmchisti/fastra",
+      keywords: ["template"],
+      scripts: {},
+      dependencies: {},
+      devDependencies: {},
+    };
+
+    const result = updatePackageJson(
+      pkg,
+      { auth: "a", orm: "x" },
+      { removeSetup: true, projectName: "shop-api" },
+      manifest,
+    );
+
+    expect(result).toMatchObject({ name: "shop-api", version: "0.1.0", description: "" });
+    expect(result).not.toHaveProperty("repository");
+    expect(result).not.toHaveProperty("homepage");
+    expect(result).not.toHaveProperty("keywords");
+  });
+
+  it("keeps template metadata when no name is given", () => {
+    const result = updatePackageJson(
+      { name: "fastra", repository: { url: "x" } },
+      { auth: "a", orm: "x" },
+      { removeSetup: false },
+      manifest,
+    );
+
+    expect(result).toMatchObject({ name: "fastra", repository: { url: "x" } });
+  });
+
+  it("replaces only the first README heading", () => {
+    expect(renameReadme("# Fastra\n\ntext\n# Other", "shop-api")).toBe("# shop-api\n\ntext\n# Other");
   });
 });
 
