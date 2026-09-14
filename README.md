@@ -54,18 +54,36 @@ Pick your auth provider, ORM, file storage and deploy target once, and the setup
 <!-- @setup-template-only -->
 ## Start a new project
 
-```bash
-git clone <this-repo> my-api && cd my-api
-rm -rf .git && git init && git add -A && git commit -m "Initial commit"
-pnpm install
-pnpm setup:project
-```
+This repository is a GitHub template.
+
+1. Create your repository from the template, either:
+   - on GitHub: **Use this template** → **Create a new repository**, then `git clone` it, or
+   - from a terminal (creates and clones in one step):
+     ```bash
+     gh repo create my-api --template fmchisti/fastify-backend-boilerplate --private --clone
+     ```
+
+   The new repository starts with a clean history and is not linked to this one.
+2. Install and choose your providers:
+   ```bash
+   cd my-api
+   pnpm install
+   pnpm setup:project
+   ```
+3. Commit the result:
+   ```bash
+   git add -A && git commit -m "chore: configure project" && git push
+   ```
+
+Run setup in the new repository, never in this template itself: it deletes the providers you did not choose. It also refuses to run while git has uncommitted changes.
 
 `setup:project` asks five questions, then removes unselected providers (code, tests, dependencies, env vars), regenerates the initial migration, and type-checks. Non-interactive:
 
 ```bash
 pnpm setup:project --auth logto --orm prisma --storage s3 --redis redis --deploy railway --yes
 ```
+
+Projects created from the template do not receive later template changes automatically. To pick up a fix, create a fresh project from the template with the same options and port the changed files.
 
 <!-- @setup-endif -->
 ## Getting started
