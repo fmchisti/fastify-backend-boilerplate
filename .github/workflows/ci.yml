@@ -82,9 +82,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { auth: better-auth, orm: drizzle, redis: none }
-          - { auth: better-auth, orm: prisma, redis: redis }
-          - { auth: none, orm: none, redis: none }
+          - { auth: better-auth, orm: drizzle, storage: local, redis: none }
+          - { auth: better-auth, orm: prisma, storage: local, redis: redis }
+          # File storage needs auth, so the API-only project has none
+          - { auth: none, orm: none, storage: none, redis: none }
     # @setup-endif
     # @setup-if orm!=none|redis=redis
     services:
@@ -125,7 +126,7 @@ jobs:
       - name: Configure a project from the template
         run: |
           git config user.email ci@example.com && git config user.name CI
-          pnpm setup:project --auth ${{ matrix.auth }} --orm ${{ matrix.orm }} --storage local --redis ${{ matrix.redis }} --deploy none --yes --force
+          pnpm setup:project --auth ${{ matrix.auth }} --orm ${{ matrix.orm }} --storage ${{ matrix.storage }} --redis ${{ matrix.redis }} --deploy none --yes --force
       # @setup-endif
       - name: Build image
         run: docker build -t api .
