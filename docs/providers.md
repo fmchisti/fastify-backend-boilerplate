@@ -136,5 +136,5 @@ The files module (`/api/files`) generates keys as `<userId>/<uuid>.<ext>`, allow
 <!-- @setup-endif -->
 
 <!-- @setup-if storage=none -->
-File storage was not selected. To add it later, copy `src/storage` and `src/modules/files` from the boilerplate.
+File storage was not selected. To add it later, copy `src/storage` and `src/modules/files` from [Fastra](https://github.com/fmchisti/fastra).
 <!-- @setup-endif -->

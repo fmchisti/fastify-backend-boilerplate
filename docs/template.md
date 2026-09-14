@@ -1,6 +1,6 @@
-# Maintaining the boilerplate
+# Maintaining Fastra
 
-This file is for changes to the template itself. `pnpm setup:project` deletes it (with `setup/` and `test/setup/`) from generated projects.
+This file is for changes to Fastra, the template itself. `pnpm setup:project` deletes it (with `setup/` and `test/setup/`) from generated projects.
 
 ## How setup works
 

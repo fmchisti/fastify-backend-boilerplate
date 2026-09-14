@@ -1,7 +1,7 @@
 {
-  "name": "fastify-backend-boilerplate",
+  "name": "fastra",
   "version": "1.0.0",
-  "description": "Type-safe Fastify + TypeScript API boilerplate with selectable auth (Better Auth, Supabase, Firebase, Logto), ORM (Drizzle, Prisma), and storage (S3, local)",
+  "description": "Fastra: type-safe Fastify + TypeScript API starter. Pick auth (Better Auth, Supabase, Firebase, Logto), ORM (Drizzle, Prisma), storage (S3, local), and Redis; setup deletes the rest.",
   "main": "dist/index.js",
   "scripts": {
     "deploy": "railway up",
@@ -30,7 +30,12 @@
   "keywords": [
     "fastify",
     "typescript",
-    "api"
+    "template",
+    "starter",
+    "api",
+    "drizzle",
+    "prisma",
+    "better-auth"
   ],
   "author": "",
   "license": "ISC",
@@ -92,5 +97,13 @@
   "packageManager": "pnpm@10.28.2",
   "engines": {
     "node": ">=22.12"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fmchisti/fastra.git"
+  },
+  "homepage": "https://github.com/fmchisti/fastra#readme",
+  "bugs": {
+    "url": "https://github.com/fmchisti/fastra/issues"
   }
 }

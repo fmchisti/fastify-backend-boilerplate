@@ -3,7 +3,7 @@ import type { FastifySwaggerUiOptions } from "@fastify/swagger-ui";
 import { jsonSchemaTransform } from "fastify-type-provider-zod";
 import { isValidBasicAuth } from "../lib/basic-auth.ts";
 import { HttpError } from "../lib/errors.ts";
-import { APP_VERSION } from "./app-info.ts";
+import { APP_NAME, APP_VERSION } from "./app-info.ts";
 import type { Env } from "./env.ts";
 
 export const createSwaggerOptions = (env: Env): FastifyDynamicSwaggerOptions => ({
@@ -11,7 +11,7 @@ export const createSwaggerOptions = (env: Env): FastifyDynamicSwaggerOptions => 
   openapi: {
     openapi: "3.1.0",
     info: {
-      title: "Fastify API",
+      title: `${APP_NAME} API`,
       description: "A type-safe Fastify backend API. Add your own routes and modules under `src/modules`.",
       version: APP_VERSION,
       contact: {

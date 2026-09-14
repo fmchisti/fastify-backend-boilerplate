@@ -4,18 +4,26 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import * as p from "@clack/prompts";
 import { formatProject, type Runner, regenerateDatabaseArtifacts } from "./database.ts";
-import { applySelection, describeSelection, nextStepsFor, validateSelection } from "./engine.ts";
+import {
+  applySelection,
+  describeSelection,
+  nextStepsFor,
+  toProjectName,
+  validateProjectName,
+  validateSelection,
+} from "./engine.ts";
 import { FEATURE_IDS, type FeatureId, features, type OptionManifest, type Selection } from "./features.ts";
 
 const HELP = `
-Configure this boilerplate for a new project. Deletes code, dependencies and env
+Configure a new project created from Fastra. Deletes code, dependencies and env
 vars for everything you do not select.
 
 Usage:
   pnpm setup:project                           interactive
-  pnpm setup:project --auth logto --orm prisma --storage s3 --redis redis --deploy railway --yes
+  pnpm setup:project --name shop-api --auth logto --orm prisma --storage s3 --redis redis --deploy railway --yes
 
 Options:
+  --name         package name for the project (default: folder name)
 ${FEATURE_IDS.map((id) => `  --${id.padEnd(10)} ${Object.keys(features[id].options).join(" | ")}  (default: ${features[id].default})`).join("\n")}
   --yes          use defaults for anything not passed, skip confirmation
   --dir          project directory (default: current directory)
@@ -44,6 +52,7 @@ const isGitDirty = (cwd: string): boolean => {
 const main = async () => {
   const { values } = parseArgs({
     options: {
+      name: { type: "string" },
       auth: { type: "string" },
       orm: { type: "string" },
       storage: { type: "string" },
@@ -72,7 +81,7 @@ const main = async () => {
   }
 
   const cwd = path.resolve(String(values.dir));
-  p.intro("Fastify boilerplate setup");
+  p.intro("Fastra setup");
 
   if (!values.force && isGitDirty(cwd)) {
     p.cancel(
@@ -80,6 +89,30 @@ const main = async () => {
     );
     process.exit(1);
   }
+
+  const defaultName = toProjectName(path.basename(cwd));
+  let projectName = values.name ?? defaultName;
+  if (values.name === undefined && !values.yes) {
+    const answer = await p.text({
+      message: "Project name",
+      placeholder: defaultName,
+      defaultValue: defaultName,
+      validate: (value) => {
+        try {
+          validateProjectName(value || defaultName);
+          return undefined;
+        } catch (error) {
+          return error instanceof Error ? error.message : String(error);
+        }
+      },
+    });
+    if (p.isCancel(answer)) {
+      p.cancel("Setup cancelled. Nothing was changed.");
+      process.exit(0);
+    }
+    projectName = answer || defaultName;
+  }
+  validateProjectName(projectName);
 
   const selection: Record<string, string> = {};
   for (const feature of FEATURE_IDS) {
@@ -112,7 +145,7 @@ const main = async () => {
 
   validateSelection(selection);
   const chosen = selection as Selection;
-  p.note(describeSelection(chosen).join("\n"), "Selection");
+  p.note([`Name: ${projectName}`, ...describeSelection(chosen)].join("\n"), "Selection");
 
   if (!values.yes) {
     const confirmed = await p.confirm({ message: "Apply? Unselected providers will be deleted." });
@@ -124,7 +157,7 @@ const main = async () => {
 
   const spinner = p.spinner();
   spinner.start("Removing unselected providers");
-  const result = await applySelection(cwd, chosen, { removeSetup: !values["keep-setup"] });
+  const result = await applySelection(cwd, chosen, { removeSetup: !values["keep-setup"], projectName });
   spinner.stop(`Removed ${result.removed.length} paths, updated ${result.updatedFiles.length} files`);
 
   if (!values["skip-install"]) {
