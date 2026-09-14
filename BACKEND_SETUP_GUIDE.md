@@ -71,7 +71,7 @@ backend/
     "fastify": "^5.7.2",
     "fastify-type-provider-zod": "^6.1.0",
     "pg": "^8.16.3",
-    "pino": "^8.17.2",
+    "pino": "^10.3.0",
     "postgres": "^3.4.3",
     "zod": "^4.3.5"
   },
@@ -79,7 +79,7 @@ backend/
     "@types/node": "^20.19.28",
     "@types/pg": "^8.16.0",
     "drizzle-kit": "^0.31.8",
-    "pino-pretty": "^10.3.1",
+    "pino-pretty": "^13.1.3",
     "tsx": "^4.21.0",
     "typescript": "^5.3.3"
   }

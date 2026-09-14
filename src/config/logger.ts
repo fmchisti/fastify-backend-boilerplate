@@ -1,27 +1,26 @@
-import pino, { Logger } from "pino";
+import pino, { type Logger, type LoggerOptions } from "pino";
 import { env } from "./env";
 
+const isDevelopment = env.NODE_ENV === "development";
+
 // Logger options for Fastify
-export const loggerOptions = {
-  level: env.LOG_LEVEL || (env.NODE_ENV === "development" ? "debug" : "info"),
-  transport:
-    env.NODE_ENV === "development"
-      ? {
-          target: "pino-pretty",
-          options: {
-            colorize: true,
-            translateTime: "HH:MM:ss Z",
-            ignore: "pid,hostname",
-          },
-        }
-      : undefined,
-  formatters: {
-    level: (label: string) => {
-      return { level: label };
+export const loggerOptions: LoggerOptions = {
+  level: env.LOG_LEVEL ?? (isDevelopment ? "debug" : "info"),
+  ...(isDevelopment && {
+    transport: {
+      target: "pino-pretty",
+      options: {
+        colorize: true,
+        translateTime: "HH:MM:ss Z",
+        ignore: "pid,hostname",
+      },
     },
+  }),
+  formatters: {
+    level: (label) => ({ level: label }),
   },
   timestamp: pino.stdTimeFunctions.isoTime,
 };
 
-// Standalone logger instance for use outside of Fastify
+// Standalone logger for code outside a request. Inside handlers, prefer `request.log`.
 export const logger: Logger = pino(loggerOptions);

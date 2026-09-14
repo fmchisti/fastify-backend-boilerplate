@@ -1,18 +1,16 @@
 import { z } from "zod";
 
-// Health check
-export const HealthCheckSchemaResponse = z.object({
-  status: z.string(),
-  timestamp: z.string(),
-  uptime: z.number(),
-  environment: z.string(),
+export const HealthCheckResponseSchema = z.object({
+  status: z.literal("healthy"),
+  timestamp: z.iso.datetime(),
+  uptime: z.number().int().nonnegative(),
+  environment: z.enum(["development", "production", "test"]),
 });
 
-export type HealthCheckResponse = z.infer<typeof HealthCheckSchemaResponse>;
+export type HealthCheckResponse = z.infer<typeof HealthCheckResponseSchema>;
 
-// Health check schema
 export const HealthCheckSchema = {
   response: {
-    200: HealthCheckSchemaResponse,
+    200: HealthCheckResponseSchema,
   },
 };

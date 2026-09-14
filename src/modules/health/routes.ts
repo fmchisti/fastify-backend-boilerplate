@@ -1,17 +1,13 @@
-import type { FastifyPluginOptions, FastifyInstance } from "fastify";
-import type { ZodTypeProvider } from "fastify-type-provider-zod";
-import * as healthDocs from "./docs";
+import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
+import { healthCheckDocs } from "./docs";
 import { healthCheckHandler } from "./handler";
 import { HealthCheckSchema } from "./schema";
 
-const healthRoutes = async (
-  fastify: FastifyInstance,
-  options: FastifyPluginOptions,
-): Promise<void> => {
-  fastify.withTypeProvider<ZodTypeProvider>().route({
+const healthRoutes: FastifyPluginAsyncZod = async (fastify) => {
+  fastify.route({
     method: "GET",
     url: "/health",
-    schema: { ...HealthCheckSchema, ...healthDocs.healthCheckDocs },
+    schema: { ...HealthCheckSchema, ...healthCheckDocs },
     handler: healthCheckHandler,
   });
 };

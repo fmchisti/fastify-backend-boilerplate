@@ -14,7 +14,8 @@ export default defineConfig({
   dialect: "postgresql",
   migrations: {
     table: "__drizzle_migrations",
-    schema: "./drizzle",
+    // Postgres schema that holds the migrations table (not a folder path)
+    schema: "drizzle",
   },
   dbCredentials: {
     url: databaseUrl,
