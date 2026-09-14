@@ -15,6 +15,7 @@ Usage:
 Examples:
   pnpm create fastra shop-api
   pnpm create fastra shop-api --auth logto --orm prisma --storage s3 --redis redis --deploy railway --yes
+  pnpm create fastra gateway --auth none --orm none --storage none --redis none --deploy none --yes
 
 Options:
   --template <source>  Template to download (default: ${DEFAULT_TEMPLATE}).
@@ -24,8 +25,8 @@ Options:
 
 Every other option is passed to Fastra's setup:
   --name <name>        Package name (default: directory name)
-  --auth               better-auth | supabase | firebase | logto
-  --orm                drizzle | prisma
+  --auth               better-auth | supabase | firebase | logto | none
+  --orm                drizzle | prisma | none
   --storage            s3 | local | none
   --redis              none | redis
   --deploy             railway | none

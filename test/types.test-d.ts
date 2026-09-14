@@ -1,7 +1,7 @@
 // Compile-time checks: run by `vitest --typecheck` and `pnpm type-check`
 import { describe, expectTypeOf, it } from "vitest";
 import { z } from "zod";
-import type { AuthUser } from "../src/auth/types.ts";
+import type { AuthUser } from "../src/auth/types.ts"; // @setup-if auth!=none
 import type { ZodRouteHandler } from "../src/types/fastify.ts";
 
 const CreateTodoSchema = {
@@ -27,6 +27,7 @@ describe("ZodRouteHandler", () => {
   });
 });
 
+// @setup-if auth!=none
 describe("request.user", () => {
   it("is typed as AuthUser | null on every request", () => {
     const handler: ZodRouteHandler<typeof CreateTodoSchema> = async (request) => {
@@ -36,3 +37,4 @@ describe("request.user", () => {
     expectTypeOf(handler).toBeFunction();
   });
 });
+// @setup-endif

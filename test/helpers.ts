@@ -2,18 +2,26 @@ import { afterAll, beforeAll } from "vitest";
 import { type App, buildApp } from "../src/app.ts";
 import { type Env, parseEnv } from "../src/config/env.ts";
 import type { AppDependencies } from "../src/container.ts";
-import { createFakeAuthProvider } from "./fakes/auth.ts";
-import { createFakeDatabase } from "./fakes/database.ts";
+import { createFakeAuthProvider } from "./fakes/auth.ts"; // @setup-if auth!=none
+import { createFakeDatabase } from "./fakes/database.ts"; // @setup-if orm!=none
 import { createRedisMock } from "./fakes/redis.ts"; // @setup-if redis=redis
 import { createMemoryStorage } from "./fakes/storage.ts"; // @setup-if storage=s3,local
-import { createMemoryTodoRepository } from "./fakes/todo-repository.ts";
+import { createMemoryTodoRepository } from "./fakes/todo-repository.ts"; // @setup-if auth!=none&orm!=none
 
 /** Fake implementations of every dependency. No database, network, or provider credentials needed. */
 export const createTestDependencies = (overrides: Partial<AppDependencies> = {}): AppDependencies => ({
+  // @setup-if orm!=none
   database: createFakeDatabase(),
+  // @setup-endif
+  // @setup-if auth!=none
   auth: createFakeAuthProvider(),
+  // @setup-endif
+  // @setup-if auth!=none&orm!=none
   todos: createMemoryTodoRepository(),
+  // @setup-endif
+  // @setup-if orm!=none
   // @gen:fakes
+  // @setup-endif
   // @setup-if storage=s3,local
   storage: createMemoryStorage(),
   // @setup-endif
@@ -30,8 +38,11 @@ export const testEnv = (overrides: Record<string, string> = {}): Env =>
 export const buildTestApp = async (
   overrides: Partial<AppDependencies> = {},
   env: Env = testEnv(),
+  /** Add test-only routes before the app is ready. */
+  configure?: (app: App) => void,
 ): Promise<App> => {
   const app = await buildApp(createTestDependencies(overrides), { env });
+  configure?.(app);
   await app.ready();
   return app;
 };
@@ -59,6 +70,11 @@ export const useTestApp = (overrides: () => Partial<AppDependencies> = () => ({}
 
 export const basicAuthHeader = (username: string, password: string): string =>
   `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
+
+/** Adds `GET /api/limited`: a normal, rate-limited route that exists in every project. */
+export const withLimitedRoute = (app: App): void => {
+  app.get("/api/limited", async () => ({ ok: true }));
+};
 
 /** Builds a multipart/form-data body for `app.inject`. */
 export const multipartBody = (

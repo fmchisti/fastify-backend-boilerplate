@@ -6,27 +6,32 @@ This file is for changes to Fastra, the template itself. `pnpm setup:project` de
 
 `setup/cli.ts` asks for one option per feature in `setup/features.ts` (auth, orm, storage, redis, deploy), then:
 
-1. **Deletes paths** owned by unselected options (`paths` in the manifest).
+1. **Checks constraints**: an option's `requires` limits other features (Better Auth requires a database; file storage requires auth). The CLI only offers compatible options.
+2. **Deletes paths** owned by unselected options (`paths` in the manifest) and by `CONDITIONAL` entries whose `keepWhen` does not match.
    - A path listed by several options of the same feature is kept if any of them is selected.
    - A path listed by several features is kept only if every feature keeps it (e.g. `src/auth/providers/better-auth/database/prisma.ts` needs Better Auth and Prisma).
-2. **Resolves directives** in `.ts`, `.mts`, `.prisma`, `.md`, `.mdc`, `.yml`, and `Dockerfile` files, and removes the directive comments.
-3. **Rewrites `package.json`**: removes dependencies and scripts owned only by unselected options, sets the selected options' scripts, and removes the setup tool.
-4. **Generates `.env.example`** from `CORE_ENV` plus the selected options' `env`.
-5. Runs `pnpm install`, regenerates the initial migration for the selected schema, formats with Biome, and type-checks.
+   - `CONDITIONAL` covers combinations, e.g. the `todos` example with `keepWhen: "auth!=none&orm!=none"`, and removes their scripts and dependencies too.
+3. **Resolves directives** in `.ts`, `.mts`, `.prisma`, `.md`, `.mdc`, `.yml`, and `Dockerfile` files, and removes the directive comments.
+4. **Rewrites `package.json`**: removes dependencies and scripts owned only by unselected options, sets the selected options' scripts, and removes the setup tool.
+5. **Generates `.env.example`** from `CORE_ENV` plus the selected options' `env`.
+6. Runs `pnpm install`, regenerates the initial migration for the selected schema, creates the public `notes` example when there is a database but no auth, formats with Biome, and type-checks.
 
 ## Directives
 
 | Form | Use for | Example |
 |---|---|---|
 | Trailing `// @setup-select <feature>` | Import/export whose path names the selected option | `export { createAuthProvider } from "./providers/better-auth/index.ts"; // @setup-select auth` |
-| Trailing `// @setup-if <feature>=<a>,<b>` | Keep one complete one-line `import`/`export` | `import fileRoutes from "./modules/files/routes.ts"; // @setup-if storage=s3,local` |
-| Block `// @setup-if <feature>=<a>,<b>` … `// @setup-endif` | Anything else (object properties, route registration, docs sections) | see `src/container.ts` |
+| Trailing `// @setup-if <condition>` | Keep one complete one-line `import`/`export` | `import todoRoutes from "./modules/todos/routes.ts"; // @setup-if auth!=none&orm!=none` |
+| Block `// @setup-if <condition>` … `// @setup-endif` | Anything else (object properties, route registration, docs sections) | see `src/container.ts` |
 | Block `@setup-template-only` … `@setup-endif` | Text that only makes sense before setup | see `README.md` |
 
-- Blocks also work as `# …` (YAML, Dockerfile) and `<!-- … -->` (Markdown). Blocks cannot be nested.
+- **Conditions:** clauses `feature=a,b` (one of) or `feature!=a,b` (none of), joined with `&` (and) and `|` (or; `&` binds tighter), no spaces. Examples: `storage=s3,local`, `auth!=none&orm!=none`, `orm!=none|redis=redis`.
+- Blocks can be nested: a line is kept only if every enclosing block matches. They also work as `# …` (YAML, Dockerfile) and `<!-- … -->` (Markdown).
+- **Every combination must compile in the template**, where all blocks are kept. Never put two variants that conflict (the same property or variable declared twice) in separate blocks; nest blocks instead.
 - **Imports must use the trailing forms.** Biome's organize-imports moves standalone comment lines with the import below them, which breaks block directives around imports.
 - In Markdown tables, avoid block directives between rows (they break table rendering in the template); use lists instead.
-- `@gen:` markers are not setup directives. They stay in generated projects for `pnpm gen:module`.
+- `@gen:` markers are not setup directives. They stay in generated projects with a database for `pnpm gen:module` (wrapped in `@setup-if orm!=none`).
+- When a feature is `none`, code can become unused (an empty interface, an unused parameter). Add the Biome suppression as `// @setup-emit // biome-ignore …` inside a block for exactly that combination (see `src/container.ts`): it stays inert in the template, where a real suppression would be reported as unused, and becomes active in the generated project.
 
 ## Template state
 
@@ -36,7 +41,7 @@ The template compiles and runs with every option present at once: `@setup-select
 
 1. Implement the interface under `src/<area>/providers/<id>/` with the same factory name as the other options (`createAuthProvider`, `createStorage`, `createDatabase`). Validate env inside with `loadEnv`. Accept injected clients for tests.
 2. Add tests next to the others (`test/providers/<id>.test.ts`, …) using injected fakes, no network.
-3. Add the option to `setup/features.ts`: `paths`, `dependencies`, `devDependencies`, `scripts`, `env`, `nextSteps`. Install dependencies in the template's `package.json`.
+3. Add the option to `setup/features.ts`: `paths`, `dependencies`, `devDependencies`, `scripts`, `env`, `nextSteps`, and `requires` if it only works with some options of another feature. Install dependencies in the template's `package.json`.
 4. Add `@setup-if` blocks where the option changes shared files (Dockerfile, CI env, docs).
 5. Run `pnpm setup:verify --only <id>`, then the full matrix.
 
@@ -45,7 +50,7 @@ Adding a whole feature (a new question): add it to `features`, the CLI flags in 
 ## Verifying
 
 ```bash
-pnpm setup:verify                 # every auth × ORM × storage × Redis combination
+pnpm setup:verify                 # every valid auth × database × storage × Redis combination
 pnpm setup:verify --only prisma   # combinations whose name contains "prisma"
 pnpm setup:verify --no-tests      # skip vitest
 ```

@@ -48,8 +48,12 @@ describe("/api/docs protection", () => {
     const spec = response.json<{ paths: Record<string, unknown> }>();
     const expectedPaths = [
       "/api/health",
+      // @setup-if auth!=none
       "/api/me",
+      // @setup-endif
+      // @setup-if auth!=none&orm!=none
       "/api/todos",
+      // @setup-endif
       // @setup-if storage=s3,local
       "/api/files",
       // @setup-endif

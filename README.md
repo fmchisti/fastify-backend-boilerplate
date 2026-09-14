@@ -2,21 +2,23 @@
 
 Type-safe Fastify + TypeScript API.
 <!-- @setup-template-only -->
-**Fastra** is a starter for production APIs. Pick your auth provider, ORM, file storage, Redis, and deploy target once, and the setup CLI deletes everything you did not choose.
+**Fastra** is a starter for production APIs. Pick your auth provider, database, file storage, Redis, and deploy target once (each can be "none", e.g. for an API that only calls other services), and the setup CLI deletes everything you did not choose.
 <!-- @setup-endif -->
 
 ## Stack
 
 - **Fastify 5** + **TypeScript** (strict, ESM) + **Zod 4** for validation, types, and OpenAPI
+<!-- @setup-if orm!=none -->
 - **PostgreSQL**: local Docker, Railway, Supabase, Neon, RDS… anything with a connection string
+<!-- @setup-endif -->
 - **Swagger UI** at `/api/docs`, **Pino** logging, **Vitest** tests (no database or credentials needed)
 
 <!-- @setup-template-only -->
 | Choice | Options |
 |---|---|
-| Auth | Better Auth (self-hosted) · Supabase · Firebase · Logto |
-| ORM | Drizzle · Prisma |
-| File storage | S3-compatible (AWS S3, R2, MinIO, Railway Buckets) · local disk · none |
+| Auth | Better Auth (self-hosted, needs a database) · Supabase · Firebase · Logto · none |
+| Database | Drizzle · Prisma · none |
+| File storage | S3-compatible (AWS S3, R2, MinIO, Railway Buckets) · local disk · none (uploads need auth) |
 | Redis | shared rate limits + readiness check · none |
 | Deploy | Railway · none |
 <!-- @setup-endif -->
@@ -32,11 +34,17 @@ Type-safe Fastify + TypeScript API.
 <!-- @setup-if auth=logto -->
 - **Auth**: Logto
 <!-- @setup-endif -->
+<!-- @setup-if auth=none -->
+- **Auth**: none (public API)
+<!-- @setup-endif -->
 <!-- @setup-if orm=drizzle -->
 - **ORM**: Drizzle
 <!-- @setup-endif -->
 <!-- @setup-if orm=prisma -->
 - **ORM**: Prisma
+<!-- @setup-endif -->
+<!-- @setup-if orm=none -->
+- **Database**: none
 <!-- @setup-endif -->
 <!-- @setup-if storage=s3 -->
 - **Storage**: S3-compatible
@@ -101,15 +109,44 @@ Projects do not receive later Fastra changes automatically. To pick up a fix, cr
 
 ```bash
 cp .env.example .env
+```
+<!-- @setup-if orm!=none|redis!=none -->
+
+Start local services (Postgres, Redis) in Docker, or point the URLs in `.env` elsewhere:
+
+```bash
 pnpm db:up
+```
+<!-- @setup-endif -->
+<!-- @setup-if orm!=none -->
+
+Apply migrations:
+
+```bash
 pnpm db:migrate
+```
+<!-- @setup-endif -->
+
+Run:
+
+```bash
 pnpm dev
 ```
 
 - API docs: http://localhost:3000/api/docs
-- Liveness: `GET /api/health` · Readiness (database, Redis if used): `GET /api/health/ready`
+- Liveness: `GET /api/health` · Readiness (checks external dependencies): `GET /api/health/ready`
+<!-- @setup-if auth!=none -->
 - Current user: `GET /api/me`
+<!-- @setup-endif -->
+<!-- @setup-if auth!=none&orm!=none -->
 - Example CRUD: `/api/todos`. Create your own with `pnpm gen:module product --fields "name:string price:float"`
+<!-- @setup-endif -->
+<!-- @setup-if auth=none&orm!=none -->
+- Example CRUD: `/api/notes` (public). Create your own with `pnpm gen:module product --fields "name:string price:float"`
+<!-- @setup-endif -->
+<!-- @setup-if orm=none -->
+- Add routes in `src/modules/<name>/` (see [AGENTS.md](./AGENTS.md)). Call external APIs from a service with `fetch`.
+<!-- @setup-endif -->
 <!-- @setup-if storage=s3,local -->
 - File uploads: `/api/files`
 <!-- @setup-endif -->
@@ -123,12 +160,21 @@ pnpm dev
 | `pnpm type-check` | TypeScript check (src + tests) |
 | `pnpm check` / `pnpm check:fix` | Lint + format check (Biome) / apply fixes |
 | `pnpm test` | Unit, integration, and type tests |
-| `pnpm db:up` / `pnpm db:down` | Local Postgres (and Redis, if used) in Docker |
-| `pnpm db:migrate:deploy` | Apply migrations in production (after `pnpm build`) |
-| `pnpm db:studio` | Browse the database |
-| `pnpm gen:module <name> --fields "..."` | Scaffold a CRUD module with table, migration, and tests |
 
+<!-- @setup-if orm!=none|redis!=none|storage=s3 -->
+Local services: `pnpm db:up` / `pnpm db:down` (Docker).
+<!-- @setup-endif -->
+<!-- @setup-if orm!=none -->
+
+Database:
+- `pnpm gen:module <name> --fields "..."`: scaffold a CRUD module with table, migration, and tests
+- `pnpm db:migrate:deploy`: apply migrations in production (after `pnpm build`)
+- `pnpm db:studio`: browse the database
+<!-- @setup-endif -->
+
+<!-- @setup-if orm!=none -->
 Schema changes:
+<!-- @setup-endif -->
 <!-- @setup-if orm=drizzle -->
 - Drizzle: `pnpm db:generate` creates a migration from `src/db/drizzle/schema`, `pnpm db:migrate` applies it.
 <!-- @setup-endif -->
@@ -149,18 +195,29 @@ Template only (removed by setup):
 src/
   app.ts            buildApp(): plugins, error handling, routes (no listen)
   index.ts          starts the server, graceful shutdown
-  container.ts      dependencies (database, auth, repositories, storage, redis); tests swap in fakes
-  auth/             AuthProvider interface, middleware, providers/<name>
-  db/               Database interface and the selected ORM client + schema
-  storage/          StorageProvider interface and providers/<name> (if selected)
-  redis/            shared Redis client (if selected)
-  modules/<name>/   feature modules: routes, handler, service, schema, docs, repository
-  lib/              errors, pagination, crud, request id, shutdown, basic auth
+  container.ts      dependencies (clients, repositories); tests swap in fakes
+  modules/<name>/   feature modules: routes, handler, service, schema, docs
+  lib/              errors, pagination, request id, shutdown, basic auth
   config/           env, logger, swagger
-scripts/            gen:module generator
-test/               Vitest: helpers, fakes/, repositories/ contract tests on in-process Postgres
+test/               Vitest: helpers, fakes/, one test file per module
 docs/               provider details
 ```
+
+<!-- @setup-if auth!=none|orm!=none|storage!=none|redis!=none -->
+Selected providers:
+<!-- @setup-endif -->
+<!-- @setup-if auth!=none -->
+- `src/auth/`: AuthProvider interface, middleware, and the selected provider
+<!-- @setup-endif -->
+<!-- @setup-if orm!=none -->
+- `src/db/`: Database interface, ORM client and schema; `scripts/`: the `gen:module` generator; `test/repositories/`: contract tests on in-process Postgres
+<!-- @setup-endif -->
+<!-- @setup-if storage!=none -->
+- `src/storage/`: StorageProvider interface and the selected provider
+<!-- @setup-endif -->
+<!-- @setup-if redis!=none -->
+- `src/redis/`: shared Redis client
+<!-- @setup-endif -->
 
 ## Working with AI assistants
 
@@ -168,21 +225,28 @@ docs/               provider details
 
 Good prompts reference it, for example:
 
+<!-- @setup-if orm!=none -->
 - "Add a `products` module with name, price, and stock. Follow AGENTS.md, use `pnpm gen:module`, and make `pnpm type-check && pnpm test` pass."
-- "Add a stricter rate limit to `POST /api/auth/sign-in/email` and a test for it."
+<!-- @setup-endif -->
+<!-- @setup-if orm=none -->
+- "Add a `GET /api/weather/:city` route that calls the OpenWeather API through a typed client. Follow AGENTS.md and make `pnpm type-check && pnpm test` pass."
+<!-- @setup-endif -->
+- "Add a stricter rate limit to one expensive route and a test for it."
 
 Every change should end with `pnpm check:fix && pnpm type-check && pnpm test`.
 
 ## Production
 
 Built in:
-- **Graceful shutdown**: on SIGTERM, stops accepting connections, finishes in-flight requests (up to `SHUTDOWN_TIMEOUT_SECONDS`), closes the database, exits 0.
+- **Graceful shutdown**: on SIGTERM, stops accepting connections, finishes in-flight requests (up to `SHUTDOWN_TIMEOUT_SECONDS`), closes connections, exits 0.
 - **Health checks**: `/api/health` (liveness) and `/api/health/ready` (database, and Redis when used), never rate limited.
 - **Security headers** (`@fastify/helmet`), **CORS** from `CORS_ORIGINS`, **rate limiting** per client IP (`RATE_LIMIT_MAX` per `RATE_LIMIT_WINDOW`).
 - **`TRUST_PROXY=true`** behind Railway, Render, Fly, or a load balancer, so client IPs (rate limits, auth logs) are real. Leave `false` when exposed directly.
 - **Request IDs**: `x-request-id` is accepted from your proxy or generated, returned on every response, and logged as `requestId`. Authorization and cookie headers are redacted from logs.
 - **API docs** are off in production unless `DOCS_ENABLED=true` (protect them with `DOCS_USERNAME`/`DOCS_PASSWORD`).
+<!-- @setup-if orm!=none -->
 - **Migrations without dev tools**: `pnpm db:migrate:deploy`.
+<!-- @setup-endif -->
 
 <!-- @setup-if redis=none -->
 Rate limits are stored in memory, so each instance counts separately. With several instances, choose Redis in setup (or pass a Redis client to `@fastify/rate-limit` in `src/app.ts`).
@@ -195,7 +259,9 @@ Rate limits are stored in Redis, so they are shared across instances. If Redis i
 
 ```bash
 docker build -t api .
+# @setup-if orm!=none
 docker run --rm --env-file .env api pnpm db:migrate:deploy
+# @setup-endif
 docker run --env-file .env -p 3000:3000 api
 ```
 
@@ -204,9 +270,15 @@ Multi-stage image on `node:22-alpine`, production dependencies only, runs as the
 
 ### Railway
 
+<!-- @setup-if orm!=none -->
 `railway.json` builds with Railpack, runs `pnpm db:migrate:deploy` before each deploy, health-checks `/api/health/ready`, and drains for 10 seconds. Set `TRUST_PROXY=true`, `CORS_ORIGINS`, and `DATABASE_URL=${{Postgres.DATABASE_URL}}`.
 <!-- @setup-endif -->
+<!-- @setup-if orm=none -->
+`railway.json` builds with Railpack, health-checks `/api/health/ready`, and drains for 10 seconds. Set `TRUST_PROXY=true` and `CORS_ORIGINS`.
+<!-- @setup-endif -->
+<!-- @setup-endif -->
 
+<!-- @setup-if orm!=none -->
 ## Database hosting
 
 `DATABASE_URL` is the only thing that changes:
@@ -215,6 +287,7 @@ Multi-stage image on `node:22-alpine`, production dependencies only, runs as the
 - **Railway**: add a Postgres service, set `DATABASE_URL=${{Postgres.DATABASE_URL}}`
 - **Supabase**: Project Settings → Database → connection string (session pooler for long-running servers)
 - **Neon / RDS / other**: paste the connection string (add `?sslmode=require` if needed)
+<!-- @setup-endif -->
 
 ## Learn more
 

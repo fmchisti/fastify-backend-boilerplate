@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  allowedOptions,
+  incompatibility,
   pathsToRemove,
   processDirectives,
   renameReadme,
@@ -100,6 +102,64 @@ describe("processDirectives", () => {
     expect(run(input)).toBe(["start", "  x-or-y", "only-b", "end"].join("\n"));
   });
 
+  it("supports nested blocks: a line is kept only if every enclosing block matches", () => {
+    const input = [
+      "// @setup-if auth=b-two",
+      "outer",
+      "// @setup-if orm=x",
+      "inner-x",
+      "// @setup-endif",
+      "// @setup-if orm=y",
+      "inner-y",
+      "// @setup-endif",
+      "// @setup-endif",
+      "// @setup-if auth=a",
+      "// @setup-if orm=y",
+      "hidden",
+      "// @setup-endif",
+      "// @setup-endif",
+    ].join("\n");
+
+    expect(run(input)).toBe(["outer", "inner-y"].join("\n"));
+  });
+
+  it("evaluates !=, & (and), and | (or) in conditions", () => {
+    const input = [
+      'import a from "./a.ts"; // @setup-if auth!=a',
+      'import b from "./b.ts"; // @setup-if auth!=a&orm=y',
+      'import c from "./c.ts"; // @setup-if auth=a&orm=y',
+      'import d from "./d.ts"; // @setup-if auth=a|orm=y',
+      "// @setup-if auth=a|orm!=y",
+      "never",
+      "// @setup-endif",
+    ].join("\n");
+
+    expect(run(input)).toBe(
+      ['import a from "./a.ts";', 'import b from "./b.ts";', 'import d from "./d.ts";'].join("\n"),
+    );
+  });
+
+  it.each(["auth", "auth=", "auth==a", "auth!a", "nope=a", "auth=zzz"])(
+    "rejects invalid condition %j",
+    (condition) => {
+      expect(() => run(`// @setup-if ${condition}\n// @setup-endif`)).toThrow();
+    },
+  );
+
+  it("turns @setup-emit lines into their text, only where the enclosing block is kept", () => {
+    const input = [
+      "// @setup-if auth=b-two",
+      "  // @setup-emit // biome-ignore lint/x: reason",
+      "// @setup-endif",
+      "// @setup-if auth=a",
+      "// @setup-emit // hidden",
+      "// @setup-endif",
+      "code",
+    ].join("\n");
+
+    expect(run(input)).toBe(["  // biome-ignore lint/x: reason", "code"].join("\n"));
+  });
+
   it("keeps @setup-template-only blocks only while the setup tool is kept", () => {
     const input = [
       "a",
@@ -139,7 +199,6 @@ describe("processDirectives", () => {
     ["unknown option", "// @setup-if auth=zzz\n// @setup-endif"],
     ["unclosed block", "// @setup-if auth=a\nline"],
     ["endif without if", "// @setup-endif"],
-    ["nested blocks", "// @setup-if auth=a\n// @setup-if orm=x\n// @setup-endif\n// @setup-endif"],
     ["old previous-line select", "// @setup-select auth\nimport './a/x.ts';"],
   ])("throws on %s", (_label, input) => {
     expect(() => run(input)).toThrow();
@@ -148,7 +207,7 @@ describe("processDirectives", () => {
 
 describe("pathsToRemove", () => {
   it("removes unselected option paths but keeps paths shared within a feature", () => {
-    expect(pathsToRemove({ auth: "a", orm: "y" }, manifest)).toEqual([
+    expect(pathsToRemove({ auth: "a", orm: "y" }, manifest, [])).toEqual([
       "shared/auth-a-orm-x.ts",
       "src/auth/b-two",
       "src/db/x",
@@ -156,8 +215,109 @@ describe("pathsToRemove", () => {
   });
 
   it("keeps a path owned by several features only when every feature keeps it", () => {
-    expect(pathsToRemove({ auth: "a", orm: "x" }, manifest)).not.toContain("shared/auth-a-orm-x.ts");
-    expect(pathsToRemove({ auth: "b-two", orm: "x" }, manifest)).toContain("shared/auth-a-orm-x.ts");
+    expect(pathsToRemove({ auth: "a", orm: "x" }, manifest, [])).not.toContain("shared/auth-a-orm-x.ts");
+    expect(pathsToRemove({ auth: "b-two", orm: "x" }, manifest, [])).toContain("shared/auth-a-orm-x.ts");
+  });
+});
+
+describe("option constraints (requires)", () => {
+  const constrained: Record<string, FeatureManifest> = {
+    auth: {
+      label: "Auth",
+      default: "self",
+      options: {
+        self: { label: "Self", requires: { orm: ["x"] } },
+        hosted: { label: "Hosted" },
+        none: { label: "None" },
+      },
+    },
+    orm: { label: "ORM", default: "x", options: { x: { label: "X" }, none: { label: "None" } } },
+    storage: {
+      label: "Storage",
+      default: "s3",
+      options: { s3: { label: "S3", requires: { auth: ["self", "hosted"] } }, none: { label: "None" } },
+    },
+  };
+
+  it("hides options that conflict with earlier answers", () => {
+    expect(allowedOptions({ auth: "self" }, "orm", constrained)).toEqual(["x"]);
+    expect(allowedOptions({ auth: "hosted" }, "orm", constrained)).toEqual(["x", "none"]);
+    expect(allowedOptions({ auth: "none", orm: "none" }, "storage", constrained)).toEqual(["none"]);
+  });
+
+  it("explains why a combination is invalid", () => {
+    expect(incompatibility({ auth: "self", orm: "none" }, "orm", "none", constrained)).toMatch(
+      /auth "self" requires orm/,
+    );
+    expect(incompatibility({ auth: "none" }, "storage", "s3", constrained)).toMatch(
+      /storage "s3" requires auth/,
+    );
+    expect(() => validateSelection({ auth: "self", orm: "none", storage: "none" }, constrained)).toThrow(
+      /Invalid combination/,
+    );
+  });
+});
+
+describe("conditional paths, scripts, and dependencies", () => {
+  const conditional = [
+    {
+      keepWhen: "auth!=a",
+      paths: ["src/public-only"],
+      scripts: ["public:script"],
+      dependencies: ["public-dep"],
+    },
+    { keepWhen: "auth!=a&orm=x", paths: ["src/b-with-x"], devDependencies: ["b-x-dev"] },
+  ];
+
+  it("removes paths whose condition does not match", () => {
+    expect(pathsToRemove({ auth: "a", orm: "x" }, manifest, conditional)).toEqual(
+      expect.arrayContaining(["src/public-only", "src/b-with-x"]),
+    );
+    expect(pathsToRemove({ auth: "b-two", orm: "x" }, manifest, conditional)).not.toContain("src/b-with-x");
+    expect(pathsToRemove({ auth: "b-two", orm: "y" }, manifest, conditional)).toContain("src/b-with-x");
+  });
+
+  it("removes scripts and dependencies whose condition does not match", () => {
+    const pkg = {
+      scripts: { "public:script": "x" },
+      dependencies: { "public-dep": "1" },
+      devDependencies: { "b-x-dev": "1" },
+    };
+
+    const dropped = updatePackageJson(
+      pkg,
+      { auth: "a", orm: "x" },
+      { removeSetup: false },
+      manifest,
+      conditional,
+    );
+    expect(dropped.scripts).not.toHaveProperty("public:script");
+    expect(dropped.dependencies).toEqual({});
+    expect(dropped.devDependencies).toEqual({});
+
+    const kept = updatePackageJson(
+      pkg,
+      { auth: "b-two", orm: "x" },
+      { removeSetup: false },
+      manifest,
+      conditional,
+    );
+    expect(kept.scripts).toHaveProperty("public:script", "x");
+    expect(kept.devDependencies).toEqual({ "b-x-dev": "1" });
+  });
+});
+
+describe("real features manifest constraints", () => {
+  it("does not offer Better Auth without a database, or file storage without auth", () => {
+    expect(allowedOptions({ auth: "better-auth" }, "orm")).not.toContain("none");
+    expect(allowedOptions({ auth: "supabase" }, "orm")).toContain("none");
+    expect(allowedOptions({ auth: "none", orm: "none" }, "storage")).toEqual(["none"]);
+  });
+
+  it("allows an API with no database and no auth", () => {
+    expect(() =>
+      validateSelection({ auth: "none", orm: "none", storage: "none", redis: "none", deploy: "none" }),
+    ).not.toThrow();
   });
 });
 
@@ -170,7 +330,7 @@ describe("updatePackageJson", () => {
   };
 
   it("removes dependencies and scripts of unselected options, keeps shared and core ones", () => {
-    const result = updatePackageJson(pkg, { auth: "a", orm: "y" }, { removeSetup: true }, manifest);
+    const result = updatePackageJson(pkg, { auth: "a", orm: "y" }, { removeSetup: true }, manifest, []);
 
     expect(result.dependencies).toEqual({ fastify: "5", "dep-a": "1", "shared-dep": "1" });
     expect(result.devDependencies).toEqual({ vitest: "5" });
@@ -179,7 +339,7 @@ describe("updatePackageJson", () => {
   });
 
   it("keeps setup scripts and dependencies with --keep-setup", () => {
-    const result = updatePackageJson(pkg, { auth: "b-two", orm: "x" }, { removeSetup: false }, manifest);
+    const result = updatePackageJson(pkg, { auth: "b-two", orm: "x" }, { removeSetup: false }, manifest, []);
 
     expect(result.scripts).toMatchObject({
       "setup:project": "tsx setup/cli.ts",
@@ -223,6 +383,7 @@ describe("project name", () => {
       { auth: "a", orm: "x" },
       { removeSetup: true, projectName: "shop-api" },
       manifest,
+      [],
     );
 
     expect(result).toMatchObject({ name: "shop-api", version: "0.1.0", description: "" });
@@ -237,6 +398,7 @@ describe("project name", () => {
       { auth: "a", orm: "x" },
       { removeSetup: false },
       manifest,
+      [],
     );
 
     expect(result).toMatchObject({ name: "fastra", repository: { url: "x" } });
@@ -251,7 +413,7 @@ describe("renderEnvExample", () => {
   it("includes core env and only the selected options' env", () => {
     const env = renderEnvExample({ auth: "a", orm: "x" }, manifest);
 
-    expect(env).toContain("DATABASE_URL=");
+    expect(env).toContain("PORT=");
     expect(env).toContain("# Auth: A\nA_KEY=1");
   });
 });
@@ -262,6 +424,31 @@ describe("real features manifest", () => {
       Object.entries(features).map(([id, feature]) => [id, feature.default]),
     );
     expect(() => validateSelection(defaults)).not.toThrow();
+  });
+
+  it("conditional entries reference known features, dependencies, and paths", async () => {
+    const { CONDITIONAL } = await import("../../setup/features.ts");
+    const { existsSync } = await import("node:fs");
+    const pkg = (await import("../../package.json", { with: { type: "json" } })).default as {
+      scripts: Record<string, string>;
+      dependencies: Record<string, string>;
+      devDependencies: Record<string, string>;
+    };
+    const everything = {
+      auth: "better-auth",
+      orm: "drizzle",
+      storage: "s3",
+      redis: "redis",
+      deploy: "railway",
+    };
+    for (const entry of CONDITIONAL) {
+      expect(() => pathsToRemove(everything, features, [entry])).not.toThrow();
+      for (const p of entry.paths ?? []) expect(existsSync(p), p).toBe(true);
+      for (const name of entry.scripts ?? []) expect(pkg.scripts, name).toHaveProperty([name]);
+      for (const name of entry.dependencies ?? []) expect(pkg.dependencies, name).toHaveProperty([name]);
+      for (const name of entry.devDependencies ?? [])
+        expect(pkg.devDependencies, name).toHaveProperty([name]);
+    }
   });
 
   it("only references dependencies that exist in package.json", async () => {

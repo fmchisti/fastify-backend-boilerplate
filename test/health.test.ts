@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { APP_NAME, APP_VERSION } from "../src/config/app-info.ts";
 import { HealthCheckResponseSchema } from "../src/modules/health/schema.ts";
-import { createFakeDatabase } from "./fakes/database.ts";
+import { createFakeDatabase } from "./fakes/database.ts"; // @setup-if orm!=none
 import { useTestApp } from "./helpers.ts";
 
 describe("GET /api/health", () => {
@@ -17,6 +17,20 @@ describe("GET /api/health", () => {
   });
 });
 
+// @setup-if orm=none
+describe("GET /api/health/ready", () => {
+  const app = useTestApp();
+
+  it("returns 200 when every dependency responds", async () => {
+    const response = await app().inject({ method: "GET", url: "/api/health/ready" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ status: "ready" });
+  });
+});
+// @setup-endif
+
+// @setup-if orm!=none
 describe("GET /api/health/ready", () => {
   const database = createFakeDatabase();
   const app = useTestApp(() => ({ database }));
@@ -42,6 +56,7 @@ describe("GET /api/health/ready", () => {
     });
   });
 });
+// @setup-endif
 
 describe("GET /", () => {
   const app = useTestApp();

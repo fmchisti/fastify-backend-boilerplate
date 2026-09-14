@@ -63,11 +63,6 @@ const coreEnvSchema = z
     CORS_ORIGINS: commaList.pipe(z.array(z.url("CORS_ORIGINS must be comma-separated URLs"))).default([]),
     TRUST_PROXY: TrustProxySchema,
 
-    // PostgreSQL connection string (local, Docker, Railway, Supabase, Neon, RDS, ...)
-    DATABASE_URL: z.url("DATABASE_URL must be a valid postgres:// URL"),
-    // Max connections per instance. Lower it on plans with connection limits.
-    DATABASE_POOL_MAX: z.coerce.number<string>().int().positive().default(10),
-
     // Per-IP request limit for all routes except health checks
     RATE_LIMIT_MAX: z.coerce.number<string>().int().positive().default(300),
     RATE_LIMIT_WINDOW: z.string().min(1).default("1 minute"),

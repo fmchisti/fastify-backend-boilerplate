@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { corsOrigins } from "../src/app.ts";
-import { bearer } from "./fakes/auth.ts";
-import { buildTestApp, testEnv, useTestApp } from "./helpers.ts";
+import { buildTestApp, testEnv, useTestApp, withLimitedRoute } from "./helpers.ts";
 
 describe("security headers", () => {
   const app = useTestApp();
@@ -59,7 +58,7 @@ describe("CORS", () => {
   const preflight = (origin: string) =>
     app().inject({
       method: "OPTIONS",
-      url: "/api/todos",
+      url: "/api/limited",
       headers: { origin, "access-control-request-method": "POST" },
     });
 
@@ -84,13 +83,13 @@ describe("CORS", () => {
 
 describe("rate limiting", () => {
   it("returns 429 in the standard error shape with retry-after", async () => {
-    const app = await buildTestApp({}, testEnv({ RATE_LIMIT_MAX: "2" }));
+    const app = await buildTestApp({}, testEnv({ RATE_LIMIT_MAX: "2" }), withLimitedRoute);
 
     for (let i = 0; i < 2; i++) {
-      const ok = await app.inject({ method: "GET", url: "/api/me", headers: bearer("alice-token") });
+      const ok = await app.inject({ method: "GET", url: "/api/limited" });
       expect(ok.statusCode).toBe(200);
     }
-    const limited = await app.inject({ method: "GET", url: "/api/me", headers: bearer("alice-token") });
+    const limited = await app.inject({ method: "GET", url: "/api/limited" });
 
     expect(limited.statusCode).toBe(429);
     expect(limited.json()).toEqual({
@@ -102,7 +101,7 @@ describe("rate limiting", () => {
   });
 
   it("never limits health checks", async () => {
-    const app = await buildTestApp({}, testEnv({ RATE_LIMIT_MAX: "1" }));
+    const app = await buildTestApp({}, testEnv({ RATE_LIMIT_MAX: "1" }), withLimitedRoute);
 
     for (let i = 0; i < 5; i++) {
       const response = await app.inject({ method: "GET", url: "/api/health/ready" });
@@ -112,12 +111,16 @@ describe("rate limiting", () => {
   });
 
   it("limits per client IP, resolved through trusted proxies", async () => {
-    const app = await buildTestApp({}, testEnv({ RATE_LIMIT_MAX: "1", TRUST_PROXY: "true" }));
+    const app = await buildTestApp(
+      {},
+      testEnv({ RATE_LIMIT_MAX: "1", TRUST_PROXY: "true" }),
+      withLimitedRoute,
+    );
     const from = (ip: string) =>
       app.inject({
         method: "GET",
-        url: "/api/me",
-        headers: { ...bearer("alice-token"), "x-forwarded-for": ip },
+        url: "/api/limited",
+        headers: { "x-forwarded-for": ip },
       });
 
     expect((await from("203.0.113.1")).statusCode).toBe(200);
@@ -127,12 +130,16 @@ describe("rate limiting", () => {
   });
 
   it("ignores x-forwarded-for when the proxy is not trusted", async () => {
-    const app = await buildTestApp({}, testEnv({ RATE_LIMIT_MAX: "1", TRUST_PROXY: "false" }));
+    const app = await buildTestApp(
+      {},
+      testEnv({ RATE_LIMIT_MAX: "1", TRUST_PROXY: "false" }),
+      withLimitedRoute,
+    );
     const from = (ip: string) =>
       app.inject({
         method: "GET",
-        url: "/api/me",
-        headers: { ...bearer("alice-token"), "x-forwarded-for": ip },
+        url: "/api/limited",
+        headers: { "x-forwarded-for": ip },
       });
 
     expect((await from("203.0.113.1")).statusCode).toBe(200);
@@ -144,7 +151,7 @@ describe("rate limiting", () => {
 
 describe("API docs", () => {
   it("are disabled by default in production", async () => {
-    const app = await buildTestApp({}, testEnv({ NODE_ENV: "production" }));
+    const app = await buildTestApp({}, testEnv({ NODE_ENV: "production" }), withLimitedRoute);
 
     const response = await app.inject({ method: "GET", url: "/api/docs/json" });
 
@@ -153,7 +160,11 @@ describe("API docs", () => {
   });
 
   it("can be enabled in production explicitly", async () => {
-    const app = await buildTestApp({}, testEnv({ NODE_ENV: "production", DOCS_ENABLED: "true" }));
+    const app = await buildTestApp(
+      {},
+      testEnv({ NODE_ENV: "production", DOCS_ENABLED: "true" }),
+      withLimitedRoute,
+    );
 
     const response = await app.inject({
       method: "GET",
@@ -166,6 +177,7 @@ describe("API docs", () => {
   });
 });
 
+// @setup-if auth!=none&orm!=none
 describe("graceful close", () => {
   it("closes auth and database on app.close()", async () => {
     const calls: string[] = [];
@@ -179,3 +191,4 @@ describe("graceful close", () => {
     expect(calls).toEqual(["auth", "database"]);
   });
 });
+// @setup-endif

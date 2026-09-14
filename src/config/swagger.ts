@@ -27,13 +27,20 @@ export const createSwaggerOptions = (env: Env): FastifyDynamicSwaggerOptions => 
     ],
     tags: [
       { name: "Health", description: "Health check endpoints" },
+      // @setup-if auth!=none
       { name: "Auth", description: "Current user" },
+      // @setup-endif
+      // @setup-if auth!=none&orm!=none
       { name: "Todos", description: "Example CRUD module" },
+      // @setup-endif
+      // @setup-if orm!=none
       // @gen:tags
+      // @setup-endif
       // @setup-if storage=s3,local
       { name: "Files", description: "File uploads" },
       // @setup-endif
     ],
+    // @setup-if auth!=none
     components: {
       securitySchemes: {
         bearerAuth: {
@@ -44,6 +51,7 @@ export const createSwaggerOptions = (env: Env): FastifyDynamicSwaggerOptions => 
         },
       },
     },
+    // @setup-endif
   },
 });
 

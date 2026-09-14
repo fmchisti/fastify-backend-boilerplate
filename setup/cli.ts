@@ -3,8 +3,9 @@ import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import * as p from "@clack/prompts";
-import { formatProject, type Runner, regenerateDatabaseArtifacts } from "./database.ts";
+import { createExampleModule, formatProject, type Runner, regenerateDatabaseArtifacts } from "./database.ts";
 import {
+  allowedOptions,
   applySelection,
   describeSelection,
   nextStepsFor,
@@ -122,18 +123,21 @@ const main = async () => {
       selection[feature] = passed;
       continue;
     }
-    if (values.yes) {
-      selection[feature] = manifest.default;
+    // Hide options that cannot work with earlier answers (e.g. Better Auth without a database)
+    const allowed = allowedOptions(selection, feature);
+    const fallback = allowed.includes(manifest.default) ? manifest.default : (allowed[0] ?? manifest.default);
+    if (values.yes || allowed.length === 1) {
+      selection[feature] = fallback;
       continue;
     }
     const options: Record<string, OptionManifest> = manifest.options;
     const answer = await p.select({
       message: manifest.label,
-      initialValue: manifest.default,
-      options: Object.entries(options).map(([value, option]) => ({
+      initialValue: fallback,
+      options: allowed.map((value) => ({
         value,
-        label: option.label,
-        ...(option.hint && { hint: option.hint }),
+        label: options[value]?.label ?? value,
+        ...(options[value]?.hint && { hint: options[value]?.hint }),
       })),
     });
     if (p.isCancel(answer)) {
@@ -165,9 +169,14 @@ const main = async () => {
     // Setup edits package.json on purpose; CI environments default to a frozen lockfile
     run("pnpm", ["install", "--no-frozen-lockfile"], cwd);
   }
-  // Always regenerate: the initial migration must match the selected schema
-  p.log.step("Generating database migrations");
-  await regenerateDatabaseArtifacts(cwd, chosen.orm, inheritRunner);
+  if (chosen.orm !== "none") {
+    // The initial migration must match the selected schema
+    p.log.step("Generating database migrations");
+    await regenerateDatabaseArtifacts(cwd, chosen.orm, inheritRunner);
+  }
+  if (await createExampleModule(cwd, chosen, inheritRunner)) {
+    p.log.step("Created a public `notes` example module (database without auth)");
+  }
   p.log.step("Formatting");
   await formatProject(cwd, inheritRunner);
   p.log.step("Type-checking");
@@ -176,8 +185,10 @@ const main = async () => {
   const envExists = (await readdir(cwd)).includes(".env");
   const steps = [
     ...(envExists ? [] : ["cp .env.example .env   # then fill in the values"]),
-    "pnpm db:up             # local Postgres in Docker (or point DATABASE_URL elsewhere)",
-    "pnpm db:migrate",
+    ...(chosen.orm !== "none" || chosen.redis !== "none"
+      ? ["pnpm db:up             # local services in Docker (or point the URLs elsewhere)"]
+      : []),
+    ...(chosen.orm !== "none" ? ["pnpm db:migrate"] : []),
     "pnpm dev               # http://localhost:3000/api/docs",
     ...nextStepsFor(chosen),
   ];

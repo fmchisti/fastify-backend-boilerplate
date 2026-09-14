@@ -3,8 +3,8 @@ import { cp, mkdtemp, rm, symlink } from "node:fs/promises";
 import { availableParallelism, tmpdir } from "node:os";
 import path from "node:path";
 import { parseArgs, promisify } from "node:util";
-import { formatProject, regenerateDatabaseArtifacts } from "./database.ts";
-import { applySelection } from "./engine.ts";
+import { createExampleModule, formatProject, regenerateDatabaseArtifacts } from "./database.ts";
+import { applySelection, validateSelection } from "./engine.ts";
 import { features, type Selection } from "./features.ts";
 
 const exec = promisify(execFile);
@@ -32,15 +32,25 @@ const nameOf = (selection: Selection) =>
   `${selection.auth}+${selection.orm}+${selection.storage}+${selection.redis}`;
 
 // deploy only adds config files, so it does not multiply the matrix
-const combinations = Object.keys(features.auth.options).flatMap((auth) =>
-  Object.keys(features.orm.options).flatMap((orm) =>
-    Object.keys(features.storage.options).flatMap((storage) =>
-      Object.keys(features.redis.options).map(
-        (redis) => ({ auth, orm, storage, redis, deploy: "railway" }) as Selection,
+const combinations = Object.keys(features.auth.options)
+  .flatMap((auth) =>
+    Object.keys(features.orm.options).flatMap((orm) =>
+      Object.keys(features.storage.options).flatMap((storage) =>
+        Object.keys(features.redis.options).map(
+          (redis) => ({ auth, orm, storage, redis, deploy: "railway" }) as Selection,
+        ),
       ),
     ),
-  ),
-);
+  )
+  // Skip combinations setup refuses (e.g. Better Auth without a database)
+  .filter((selection) => {
+    try {
+      validateSelection(selection);
+      return true;
+    } catch {
+      return false;
+    }
+  });
 
 const outputOf = (error: unknown): string =>
   error && typeof error === "object" && "stdout" in error && "stderr" in error
@@ -68,24 +78,27 @@ const verify = async (selection: Selection): Promise<Result> => {
 
     await applySelection(dir, selection, { removeSetup: true, projectName: "verify-app" });
     await regenerateDatabaseArtifacts(dir, selection.orm);
+    await createExampleModule(dir, selection);
     await formatProject(dir);
-    // The module generator must produce working code for every selection
-    await exec(
-      "pnpm",
-      [
-        "exec",
-        "tsx",
-        "scripts/gen-module.ts",
-        "product-item",
-        "--fields",
-        "title:string notes:text? quantity:int price:float active:boolean releasedAt:datetime?",
-      ],
-      { cwd: dir },
-    );
-    await exec("pnpm", ["exec", "tsc", "--noEmit"], { cwd: dir });
+    if (selection.orm !== "none") {
+      // The module generator must produce working code for every selection with a database
+      await exec(
+        "pnpm",
+        [
+          "exec",
+          "tsx",
+          "scripts/gen-module.ts",
+          "product-item",
+          "--fields",
+          "title:string notes:text? quantity:int price:float active:boolean releasedAt:datetime?",
+        ],
+        { cwd: dir, timeout: 300_000 },
+      );
+    }
+    await exec("pnpm", ["exec", "tsc", "--noEmit"], { cwd: dir, timeout: 300_000 });
     // Generated projects must also be lint- and format-clean (no leftovers from directives)
     await exec("pnpm", ["exec", "biome", "check", "--error-on-warnings", "."], { cwd: dir });
-    if (!values["no-tests"]) await exec("pnpm", ["exec", "vitest", "run"], { cwd: dir });
+    if (!values["no-tests"]) await exec("pnpm", ["exec", "vitest", "run"], { cwd: dir, timeout: 300_000 });
 
     await rm(dir, { recursive: true, force: true });
     return { name, ok: true, seconds: seconds() };

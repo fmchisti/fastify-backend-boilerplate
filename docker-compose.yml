@@ -1,5 +1,6 @@
 # Local development services. Start with `pnpm db:up`, stop with `pnpm db:down`.
 services:
+  # @setup-if orm!=none
   postgres:
     image: postgres:18-alpine
     restart: unless-stopped
@@ -16,6 +17,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+  # @setup-endif
 
   # @setup-if redis=redis
   redis:
@@ -49,8 +51,12 @@ services:
       - minio-data:/data
   # @setup-endif
 
+# @setup-if orm!=none|storage=s3
 volumes:
+  # @setup-if orm!=none
   postgres-data:
+  # @setup-endif
   # @setup-if storage=s3
   minio-data:
   # @setup-endif
+# @setup-endif
