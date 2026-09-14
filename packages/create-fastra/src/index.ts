@@ -304,7 +304,8 @@ const main = async () => {
 
   // 4. Install and build the project from the answers
   p.log.step("Installing dependencies");
-  const installed = (await run("pnpm", ["install"], target)) === 0;
+  // Adding a workspace package always changes the root lockfile; CI environments default to frozen
+  const installed = (await run("pnpm", ["install", "--no-frozen-lockfile"], target)) === 0;
   let setupDone = false;
   if (installed) {
     p.log.step("Creating your project");
