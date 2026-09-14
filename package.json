@@ -20,7 +20,11 @@
     "db:down": "docker compose down",
     "postinstall": "prisma generate",
     "setup:project": "tsx setup/cli.ts",
-    "db:migrate:deploy": "node dist/db/drizzle/migrate.js"
+    "db:migrate:deploy": "node dist/db/drizzle/migrate.js",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "check": "biome check .",
+    "check:fix": "biome check --write ."
   },
   "keywords": [
     "fastify",
@@ -55,6 +59,7 @@
     "zod": "^4.3.5"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.13",
     "@clack/prompts": "^1.8.1",
     "@electric-sql/pglite": "^0.5.8",
     "@electric-sql/pglite-socket": "^0.2.11",

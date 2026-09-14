@@ -5,8 +5,7 @@ import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { loadEnv } from "../../../config/env.ts";
 import type { AuthProvider, AuthProviderContext } from "../../types.ts";
-// @setup-select orm
-import { createAuthDatabase } from "./database/drizzle.ts";
+import { createAuthDatabase } from "./database/drizzle.ts"; // @setup-select orm
 
 const betterAuthEnvSchema = z.object({
   // Public URL where this API is reachable, e.g. http://localhost:3000
@@ -67,7 +66,8 @@ export const toWebRequest = (request: FastifyRequest): Request => {
 };
 
 /** Forward requests under /api/auth to Better Auth's fetch-style handler. */
-const createRoutes = (auth: BetterAuthInstance): FastifyPluginAsync =>
+const createRoutes =
+  (auth: BetterAuthInstance): FastifyPluginAsync =>
   async (fastify) => {
     fastify.route({
       method: ["GET", "POST"],

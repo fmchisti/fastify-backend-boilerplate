@@ -4,11 +4,7 @@ import fastifyRateLimit from "@fastify/rate-limit";
 import fastifySwagger from "@fastify/swagger";
 import fastifySwaggerUi from "@fastify/swagger-ui";
 import Fastify from "fastify";
-import {
-  serializerCompiler,
-  validatorCompiler,
-  type ZodTypeProvider,
-} from "fastify-type-provider-zod";
+import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { APP_NAME, APP_VERSION } from "./config/app-info.ts";
 import { type Env, env as processEnv } from "./config/env.ts";
@@ -17,9 +13,7 @@ import { createSwaggerOptions, createSwaggerUiOptions } from "./config/swagger.t
 import { type AppDependencies, createDependencies } from "./container.ts";
 import { errorHandler, HttpError, notFoundHandler } from "./lib/errors.ts";
 import { generateRequestId, REQUEST_ID_HEADER } from "./lib/request-id.ts";
-// @setup-if storage=s3,local
-import fileRoutes from "./modules/files/routes.ts";
-// @setup-endif
+import fileRoutes from "./modules/files/routes.ts"; // @setup-if storage=s3,local
 import healthRoutes from "./modules/health/routes.ts";
 import meRoutes from "./modules/me/routes.ts";
 import todoRoutes from "./modules/todos/routes.ts";

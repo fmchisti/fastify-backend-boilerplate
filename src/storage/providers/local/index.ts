@@ -51,9 +51,7 @@ export const createLocalStorage = (rootDir: string): StorageProvider => {
           stat(filePath),
           readFile(metadataPath(filePath), "utf8").catch(() => null),
         ]);
-        const metadata = rawMetadata
-          ? MetadataSchema.safeParse(JSON.parse(rawMetadata))
-          : null;
+        const metadata = rawMetadata ? MetadataSchema.safeParse(JSON.parse(rawMetadata)) : null;
         return {
           body: createReadStream(filePath),
           contentType: metadata?.success ? metadata.data.contentType : null,

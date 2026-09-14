@@ -19,9 +19,7 @@ export interface SupabaseAuthOptions {
  * `getClaims` verifies locally against the project's JWKS when asymmetric JWT keys
  * are enabled, and falls back to calling Supabase Auth for legacy HS256 projects.
  */
-export const createSupabaseAuthProvider = (
-  options: SupabaseAuthOptions = {},
-): AuthProvider => {
+export const createSupabaseAuthProvider = (options: SupabaseAuthOptions = {}): AuthProvider => {
   const auth =
     options.auth ??
     (() => {
@@ -42,7 +40,7 @@ export const createSupabaseAuthProvider = (
 
       const { claims } = data;
       // id/email come from verified claims. user_metadata is user-editable: display name only, never for authorization
-      const name = claims.user_metadata?.["full_name"] ?? claims.user_metadata?.["name"];
+      const name = claims.user_metadata?.full_name ?? claims.user_metadata?.name;
       return {
         id: claims.sub,
         email: claims.email ?? null,
@@ -52,4 +50,5 @@ export const createSupabaseAuthProvider = (
   };
 };
 
-export const createAuthProvider = (_context: AuthProviderContext): AuthProvider => createSupabaseAuthProvider();
+export const createAuthProvider = (_context: AuthProviderContext): AuthProvider =>
+  createSupabaseAuthProvider();

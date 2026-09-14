@@ -34,8 +34,7 @@ export interface S3StorageOptions {
 }
 
 const isNotFound = (error: unknown): boolean =>
-  error instanceof NoSuchKey ||
-  (error instanceof Error && error.name === "NotFound");
+  error instanceof NoSuchKey || (error instanceof Error && error.name === "NotFound");
 
 export const createS3Storage = ({ client, bucket }: S3StorageOptions): StorageProvider => ({
   name: "s3",

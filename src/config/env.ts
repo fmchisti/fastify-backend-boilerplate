@@ -20,9 +20,12 @@ export const loadEnv = <TSchema extends z.ZodType>(
 
 const booleanString = z.enum(["true", "false"]).transform((value) => value === "true");
 
-const commaList = z
-  .string()
-  .transform((value) => value.split(",").map((item) => item.trim()).filter(Boolean));
+const commaList = z.string().transform((value) =>
+  value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean),
+);
 
 /**
  * Fastify `trustProxy`: "false" (default), "true" (trust all), a hop count ("1"),
@@ -37,7 +40,10 @@ export const TrustProxySchema = z
     if (value === "true") return true;
     if (value === "false" || value === "") return false;
     if (/^\d+$/.test(value)) return Number(value);
-    return value.split(",").map((item) => item.trim()).filter(Boolean);
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
   });
 
 const coreEnvSchema = z

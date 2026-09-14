@@ -10,8 +10,10 @@ Auth, ORM, and storage sit behind interfaces; `README.md` lists which ones this 
 ## Verify every change
 
 ```bash
-pnpm type-check && pnpm test
+pnpm check:fix && pnpm type-check && pnpm test
 ```
+
+`check:fix` formats, organizes imports, and applies safe lint fixes (Biome). CI runs `pnpm check` and fails on any difference.
 
 Tests need no database, network, or credentials.
 

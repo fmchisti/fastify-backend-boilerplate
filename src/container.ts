@@ -2,9 +2,7 @@ import { createAuthProvider } from "./auth/index.ts";
 import type { AuthProvider } from "./auth/types.ts";
 import { type AppDatabase, createDatabase, type Database } from "./db/index.ts";
 import { createTodoRepository, type TodoRepository } from "./modules/todos/repository/index.ts";
-// @setup-if storage=s3,local
-import { createStorage, type StorageProvider } from "./storage/index.ts";
-// @setup-endif
+import { createStorage, type StorageProvider } from "./storage/index.ts"; // @setup-if storage=s3,local
 
 /**
  * Everything the app needs from the outside world.

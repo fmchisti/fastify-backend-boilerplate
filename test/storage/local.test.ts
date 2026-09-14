@@ -19,7 +19,11 @@ describe("local storage provider", () => {
   afterAll(() => rm(dir, { recursive: true, force: true }));
 
   it("stores, reads, and deletes objects with content type", async () => {
-    await storage.put({ key: "u1/a.txt", body: Readable.from(["hello ", "world"]), contentType: "text/plain" });
+    await storage.put({
+      key: "u1/a.txt",
+      body: Readable.from(["hello ", "world"]),
+      contentType: "text/plain",
+    });
 
     const object = await storage.get("u1/a.txt");
     expect(object?.contentType).toBe("text/plain");

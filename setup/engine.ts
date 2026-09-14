@@ -37,20 +37,45 @@ export const validateSelection = (selection: Record<string, string>, manifest: F
 // Directives
 // ---------------------------------------------------------------------------
 
-const DIRECTIVE = /^\s*(?:\/\/|#|<!--)\s*@setup-(select|if|template-only|endif)\b\s*(.*?)\s*(?:-->)?\s*$/;
+/** A whole line that is a block directive: `// @setup-if a=b`, `# @setup-endif`, `<!-- @setup-template-only -->`. */
+const BLOCK_DIRECTIVE = /^\s*(?:\/\/|#|<!--)\s*@setup-(if|template-only|endif)\b\s*(.*?)\s*(?:-->)?\s*$/;
+/** A directive trailing code on the same line: `import x from "./drizzle.ts"; // @setup-select orm`. */
+const LINE_DIRECTIVE = /^(.*?\S)\s*\/\/\s*@setup-(select|if)\s+(\S+)\s*$/;
+/** Line-level @setup-if may only remove complete one-line statements, never part of one. */
+const SINGLE_LINE_STATEMENT = /^\s*(import|export)\b.*;\s*$/;
+
+const escapeRegExp = (value: string) => value.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+
+const parseCondition = (
+  args: string,
+  selection: Record<string, string>,
+  manifest: Features,
+  where: string,
+): boolean => {
+  const [feature = "", values = ""] = args.split("=");
+  const allowed = values.split(",").map((value) => value.trim());
+  const options = optionsOf(manifest, feature);
+  for (const value of allowed) {
+    if (!(value in options)) throw new Error(`${where}: unknown ${feature} option "${value}"`);
+  }
+  const selected = selection[feature];
+  return selected !== undefined && allowed.includes(selected);
+};
 
 /**
  * Apply `@setup-*` directives to one file's content.
  *
- * - `// @setup-select <feature>`: in the next line, the path segment naming an option of
- *   <feature> (e.g. `./providers/better-auth/index.ts`) is replaced with the selected option.
- * - `// @setup-if <feature>=<a>,<b>` ... `// @setup-endif`: the block is kept only when the
- *   selected option is one of the listed ones.
+ * Trailing (survive import sorting and formatting):
+ * - `import { x } from "./providers/better-auth/index.ts"; // @setup-select auth`
+ *   replaces the path segment naming an option of <feature> with the selected option.
+ * - `import fileRoutes from "./modules/files/routes.ts"; // @setup-if storage=s3,local`
+ *   keeps the line only for the listed options. Only for one-line import/export statements.
  *
- * - `// @setup-template-only` ... `// @setup-endif`: kept only while the setup tool is kept
- *   (instructions about choosing providers that make no sense after setup).
+ * Blocks (for code that tools do not reorder):
+ * - `// @setup-if <feature>=<a>,<b>` ... `// @setup-endif`
+ * - `// @setup-template-only` ... `// @setup-endif`: kept only while the setup tool is kept.
  *
- * Directives also work with `#` and `<!-- -->` comments. Directive lines are removed.
+ * Block directives also work with `#` and `<!-- -->` comments. All directives are removed.
  */
 export const processDirectives = (
   content: string,
@@ -59,72 +84,63 @@ export const processDirectives = (
   manifest: Features = features,
   options: { keepTemplateOnly: boolean } = { keepTemplateOnly: false },
 ): string => {
-  const lines = content.split("\n");
   const output: string[] = [];
   let block: { keep: boolean; line: number } | null = null;
-  let pendingSelect: { feature: string; line: number } | null = null;
 
-  for (const [index, line] of lines.entries()) {
-    const lineNumber = index + 1;
-    const match = DIRECTIVE.exec(line);
+  for (const [index, line] of content.split("\n").entries()) {
+    const where = `${file}:${index + 1}`;
+    const blockMatch = BLOCK_DIRECTIVE.exec(line);
 
-    if (match) {
-      const [, kind, args = ""] = match;
-      if (pendingSelect) {
-        throw new Error(`${file}:${pendingSelect.line}: @setup-select must be followed by a code line`);
-      }
-      if (kind === "select") {
-        optionsOf(manifest, args);
-        pendingSelect = { feature: args, line: lineNumber };
-      } else if (kind === "template-only") {
-        if (block) throw new Error(`${file}:${lineNumber}: nested @setup blocks are not supported`);
-        block = { keep: options.keepTemplateOnly, line: lineNumber };
-      } else if (kind === "if") {
-        if (block) throw new Error(`${file}:${lineNumber}: nested @setup-if is not supported`);
-        const [feature = "", values = ""] = args.split("=");
-        const allowed = values.split(",").map((value) => value.trim());
-        const options = optionsOf(manifest, feature);
-        for (const value of allowed) {
-          if (!(value in options)) throw new Error(`${file}:${lineNumber}: unknown ${feature} option "${value}"`);
-        }
-        const selected = selection[feature];
-        block = { keep: selected !== undefined && allowed.includes(selected), line: lineNumber };
-      } else {
-        if (!block) throw new Error(`${file}:${lineNumber}: @setup-endif without @setup-if`);
+    if (blockMatch) {
+      const [, kind, args = ""] = blockMatch;
+      if (kind === "endif") {
+        if (!block) throw new Error(`${where}: @setup-endif without @setup-if`);
         block = null;
+        continue;
       }
+      if (block) throw new Error(`${where}: nested @setup blocks are not supported`);
+      block = {
+        keep:
+          kind === "template-only"
+            ? options.keepTemplateOnly
+            : parseCondition(args, selection, manifest, where),
+        line: index + 1,
+      };
       continue;
     }
 
-    if (block && !block.keep) {
-      if (pendingSelect) pendingSelect = null;
+    if (block && !block.keep) continue;
+
+    const lineMatch = LINE_DIRECTIVE.exec(line);
+    if (!lineMatch) {
+      if (/@setup-(select|if)\b/.test(line)) throw new Error(`${where}: malformed @setup directive`);
+      output.push(line);
       continue;
     }
 
-    if (pendingSelect) {
-      const { feature, line: directiveLine } = pendingSelect;
-      pendingSelect = null;
-      const ids = Object.keys(optionsOf(manifest, feature))
-        .map((id) => id.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&"))
-        .sort((a, b) => b.length - a.length);
-      const segment = new RegExp(`(?<=[/"'])(${ids.join("|")})(?=[/."'])`, "g");
-      const found = line.match(segment) ?? [];
-      if (found.length !== 1) {
-        throw new Error(
-          `${file}:${directiveLine}: expected exactly one ${feature} option in the next line, found ${found.length}`,
-        );
+    const [, code = "", kind, args = ""] = lineMatch;
+    if (kind === "if") {
+      if (!SINGLE_LINE_STATEMENT.test(code)) {
+        throw new Error(`${where}: line-level @setup-if must be on a complete one-line import/export`);
       }
-      const selected = selection[feature];
-      if (!selected) throw new Error(`${file}:${directiveLine}: no selection for ${feature}`);
-      output.push(line.replace(segment, selected));
+      if (parseCondition(args, selection, manifest, where)) output.push(code);
       continue;
     }
 
-    output.push(line);
+    const ids = Object.keys(optionsOf(manifest, args))
+      .map(escapeRegExp)
+      .sort((a, b) => b.length - a.length);
+    const segment = new RegExp(`(?<=[/"'])(${ids.join("|")})(?=[/."'])`, "g");
+    const found = code.match(segment) ?? [];
+    if (found.length !== 1) {
+      throw new Error(`${where}: expected exactly one ${args} option in the line, found ${found.length}`);
+    }
+    const selected = selection[args];
+    if (!selected) throw new Error(`${where}: no selection for ${args}`);
+    output.push(code.replace(segment, selected));
   }
 
-  if (block) throw new Error(`${file}:${block.line}: @setup-if without @setup-endif`);
-  if (pendingSelect) throw new Error(`${file}: @setup-select at end of file`);
+  if (block) throw new Error(`${file}:${block.line}: @setup block without @setup-endif`);
   return output.join("\n");
 };
 
@@ -169,12 +185,15 @@ export const updatePackageJson = (
   options: { removeSetup: boolean },
   manifest: Features = features,
 ): PackageJson => {
-  const selected = Object.entries(manifest).map(([feature, entry]) => entry.options[selection[feature] ?? ""]);
+  const selected = Object.entries(manifest).map(
+    ([feature, entry]) => entry.options[selection[feature] ?? ""],
+  );
   const all = Object.values(manifest).flatMap((entry) => Object.values(entry.options));
 
   const keep = (key: "dependencies" | "devDependencies") =>
     new Set(selected.flatMap((option) => option?.[key] ?? []));
-  const owned = (key: "dependencies" | "devDependencies") => new Set(all.flatMap((option) => option[key] ?? []));
+  const owned = (key: "dependencies" | "devDependencies") =>
+    new Set(all.flatMap((option) => option[key] ?? []));
 
   const filterDeps = (key: "dependencies" | "devDependencies", extraRemove: string[] = []) => {
     const deps = { ...(pkg[key] ?? {}) };
@@ -200,7 +219,10 @@ export const updatePackageJson = (
   };
 };
 
-export const renderEnvExample = (selection: Record<string, string>, manifest: Features = features): string => {
+export const renderEnvExample = (
+  selection: Record<string, string>,
+  manifest: Features = features,
+): string => {
   const section = (title: string, entries: EnvEntry[]) =>
     [
       `# ${title}`,

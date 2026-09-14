@@ -35,9 +35,7 @@ const healthRoutes: FastifyPluginAsyncZod<HealthRoutesOptions> = async (fastify,
         return { status: "ready" as const, database: "up" as const };
       } catch (err) {
         request.log.error({ err }, "Readiness check failed: database unreachable");
-        return reply
-          .status(503)
-          .send({ error: "Service Unavailable", message: "Database unreachable" });
+        return reply.status(503).send({ error: "Service Unavailable", message: "Database unreachable" });
       }
     },
   });

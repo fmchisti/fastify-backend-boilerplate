@@ -4,9 +4,7 @@ import { type Env, parseEnv } from "../src/config/env.ts";
 import type { AppDependencies } from "../src/container.ts";
 import { createFakeAuthProvider } from "./fakes/auth.ts";
 import { createFakeDatabase } from "./fakes/database.ts";
-// @setup-if storage=s3,local
-import { createMemoryStorage } from "./fakes/storage.ts";
-// @setup-endif
+import { createMemoryStorage } from "./fakes/storage.ts"; // @setup-if storage=s3,local
 import { createMemoryTodoRepository } from "./fakes/todo-repository.ts";
 
 /** Fake implementations of every dependency. No database, network, or provider credentials needed. */
@@ -21,7 +19,8 @@ export const createTestDependencies = (overrides: Partial<AppDependencies> = {})
 });
 
 /** Core env for tests, with optional overrides (e.g. `{ RATE_LIMIT_MAX: "2" }`). */
-export const testEnv = (overrides: Record<string, string> = {}): Env => parseEnv({ ...process.env, ...overrides });
+export const testEnv = (overrides: Record<string, string> = {}): Env =>
+  parseEnv({ ...process.env, ...overrides });
 
 export const buildTestApp = async (
   overrides: Partial<AppDependencies> = {},
@@ -36,9 +35,7 @@ export const buildTestApp = async (
  * Builds one app per test file and closes it afterwards.
  * `overrides` is a function so each file gets fresh fakes.
  */
-export const useTestApp = (
-  overrides: () => Partial<AppDependencies> = () => ({}),
-): (() => App) => {
+export const useTestApp = (overrides: () => Partial<AppDependencies> = () => ({})): (() => App) => {
   let app: App | undefined;
 
   beforeAll(async () => {

@@ -12,8 +12,7 @@ export const createSwaggerOptions = (env: Env): FastifyDynamicSwaggerOptions => 
     openapi: "3.1.0",
     info: {
       title: "Fastify API",
-      description:
-        "A type-safe Fastify backend API. Add your own routes and modules under `src/modules`.",
+      description: "A type-safe Fastify backend API. Add your own routes and modules under `src/modules`.",
       version: APP_VERSION,
       contact: {
         name: "API Support",

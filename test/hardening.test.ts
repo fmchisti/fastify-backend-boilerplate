@@ -37,7 +37,11 @@ describe("request id", () => {
   });
 
   it("reuses a safe incoming id and replaces an unsafe one", async () => {
-    const safe = await app().inject({ method: "GET", url: "/api/health", headers: { "x-request-id": "edge-123.abc" } });
+    const safe = await app().inject({
+      method: "GET",
+      url: "/api/health",
+      headers: { "x-request-id": "edge-123.abc" },
+    });
     expect(safe.headers["x-request-id"]).toBe("edge-123.abc");
 
     const unsafe = await app().inject({
@@ -89,7 +93,10 @@ describe("rate limiting", () => {
     const limited = await app.inject({ method: "GET", url: "/api/me", headers: bearer("alice-token") });
 
     expect(limited.statusCode).toBe(429);
-    expect(limited.json()).toEqual({ error: "Too Many Requests", message: expect.stringContaining("retry in") });
+    expect(limited.json()).toEqual({
+      error: "Too Many Requests",
+      message: expect.stringContaining("retry in"),
+    });
     expect(limited.headers["retry-after"]).toBeDefined();
     await app.close();
   });
@@ -107,7 +114,11 @@ describe("rate limiting", () => {
   it("limits per client IP, resolved through trusted proxies", async () => {
     const app = await buildTestApp({}, testEnv({ RATE_LIMIT_MAX: "1", TRUST_PROXY: "true" }));
     const from = (ip: string) =>
-      app.inject({ method: "GET", url: "/api/me", headers: { ...bearer("alice-token"), "x-forwarded-for": ip } });
+      app.inject({
+        method: "GET",
+        url: "/api/me",
+        headers: { ...bearer("alice-token"), "x-forwarded-for": ip },
+      });
 
     expect((await from("203.0.113.1")).statusCode).toBe(200);
     expect((await from("203.0.113.1")).statusCode).toBe(429);
@@ -118,7 +129,11 @@ describe("rate limiting", () => {
   it("ignores x-forwarded-for when the proxy is not trusted", async () => {
     const app = await buildTestApp({}, testEnv({ RATE_LIMIT_MAX: "1", TRUST_PROXY: "false" }));
     const from = (ip: string) =>
-      app.inject({ method: "GET", url: "/api/me", headers: { ...bearer("alice-token"), "x-forwarded-for": ip } });
+      app.inject({
+        method: "GET",
+        url: "/api/me",
+        headers: { ...bearer("alice-token"), "x-forwarded-for": ip },
+      });
 
     expect((await from("203.0.113.1")).statusCode).toBe(200);
     // A spoofed header must not reset the limit

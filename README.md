@@ -88,6 +88,7 @@ pnpm dev
 | `pnpm dev` | Run with hot reload |
 | `pnpm build` / `pnpm start` | Compile to `dist/` / run it |
 | `pnpm type-check` | TypeScript check (src + tests) |
+| `pnpm check` / `pnpm check:fix` | Lint + format check (Biome) / apply fixes |
 | `pnpm test` | Unit, integration, and type tests |
 | `pnpm db:up` / `pnpm db:down` | Local Postgres in Docker |
 | `pnpm db:generate` | Generate a migration (Drizzle) or client (Prisma) |

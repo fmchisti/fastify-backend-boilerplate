@@ -3,7 +3,7 @@ import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import * as p from "@clack/prompts";
-import { regenerateDatabaseArtifacts, type Runner } from "./database.ts";
+import { formatProject, type Runner, regenerateDatabaseArtifacts } from "./database.ts";
 import { applySelection, describeSelection, nextStepsFor, validateSelection } from "./engine.ts";
 import { FEATURE_IDS, type FeatureId, features, type OptionManifest, type Selection } from "./features.ts";
 
@@ -57,7 +57,12 @@ const main = async () => {
     },
   });
   // Fails to compile if a feature in features.ts has no matching flag above
-  const featureFlags: { [K in FeatureId]: string | undefined } = { auth: values.auth, orm: values.orm, storage: values.storage, deploy: values.deploy };
+  const featureFlags: { [K in FeatureId]: string | undefined } = {
+    auth: values.auth,
+    orm: values.orm,
+    storage: values.storage,
+    deploy: values.deploy,
+  };
 
   if (values.help) {
     console.log(HELP);
@@ -68,7 +73,9 @@ const main = async () => {
   p.intro("Fastify boilerplate setup");
 
   if (!values.force && isGitDirty(cwd)) {
-    p.cancel("Git has uncommitted changes. Commit or stash them first (setup deletes files), or pass --force.");
+    p.cancel(
+      "Git has uncommitted changes. Commit or stash them first (setup deletes files), or pass --force.",
+    );
     process.exit(1);
   }
 
@@ -126,6 +133,8 @@ const main = async () => {
   // Always regenerate: the initial migration must match the selected schema
   p.log.step("Generating database migrations");
   await regenerateDatabaseArtifacts(cwd, chosen.orm, inheritRunner);
+  p.log.step("Formatting");
+  await formatProject(cwd, inheritRunner);
   p.log.step("Type-checking");
   run("pnpm", ["type-check"], cwd);
 

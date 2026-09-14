@@ -3,7 +3,7 @@ import { cp, mkdtemp, rm, symlink } from "node:fs/promises";
 import { availableParallelism, tmpdir } from "node:os";
 import path from "node:path";
 import { parseArgs, promisify } from "node:util";
-import { regenerateDatabaseArtifacts } from "./database.ts";
+import { formatProject, regenerateDatabaseArtifacts } from "./database.ts";
 import { applySelection } from "./engine.ts";
 import { features, type Selection } from "./features.ts";
 
@@ -65,7 +65,10 @@ const verify = async (selection: Selection): Promise<Result> => {
 
     await applySelection(dir, selection, { removeSetup: true });
     await regenerateDatabaseArtifacts(dir, selection.orm);
+    await formatProject(dir);
     await exec("pnpm", ["exec", "tsc", "--noEmit"], { cwd: dir });
+    // Generated projects must also be lint- and format-clean (no leftovers from directives)
+    await exec("pnpm", ["exec", "biome", "check", "--error-on-warnings", "."], { cwd: dir });
     if (!values["no-tests"]) await exec("pnpm", ["exec", "vitest", "run"], { cwd: dir });
 
     await rm(dir, { recursive: true, force: true });

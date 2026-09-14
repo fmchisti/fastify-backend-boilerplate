@@ -23,9 +23,9 @@ describe("parseEnv", () => {
   });
 
   it("lists every invalid variable in the error", () => {
-    expect(() =>
-      parseEnv({ ...validEnv, DATABASE_URL: "nope", PORT: "abc" }),
-    ).toThrow(/DATABASE_URL[\s\S]*PORT|PORT[\s\S]*DATABASE_URL/);
+    expect(() => parseEnv({ ...validEnv, DATABASE_URL: "nope", PORT: "abc" })).toThrow(
+      /DATABASE_URL[\s\S]*PORT|PORT[\s\S]*DATABASE_URL/,
+    );
   });
 
   it.each([
@@ -35,7 +35,9 @@ describe("parseEnv", () => {
     ["2", 2],
     ["10.0.0.0/8, 127.0.0.1", ["10.0.0.0/8", "127.0.0.1"]],
   ])("parses TRUST_PROXY=%s", (value, expected) => {
-    expect(parseEnv({ ...validEnv, ...(value !== undefined && { TRUST_PROXY: value }) }).TRUST_PROXY).toEqual(expected);
+    expect(parseEnv({ ...validEnv, ...(value !== undefined && { TRUST_PROXY: value }) }).TRUST_PROXY).toEqual(
+      expected,
+    );
   });
 
   it("parses CORS_ORIGINS as a list of URLs", () => {

@@ -64,9 +64,9 @@ describe("files routes", () => {
   it("rejects files over the size limit and removes partial uploads", async () => {
     const storage = createMemoryStorage();
     // Config is read when the files plugin registers
-    process.env["UPLOAD_MAX_FILE_SIZE_MB"] = "0.000002"; // 2 bytes
+    process.env.UPLOAD_MAX_FILE_SIZE_MB = "0.000002"; // 2 bytes
     const app = await buildTestApp({ storage }).finally(() => {
-      delete process.env["UPLOAD_MAX_FILE_SIZE_MB"];
+      delete process.env.UPLOAD_MAX_FILE_SIZE_MB;
     });
 
     const response = await upload(app);
@@ -116,11 +116,19 @@ describe("files routes", () => {
     expect(missing.statusCode).toBe(404);
 
     // Encoded slashes reach the handler as "../../etc/passwd" and fail key validation
-    const encoded = await app.inject({ method: "GET", url: `/api/files/..%2F..%2Fetc%2Fpasswd`, headers: alice });
+    const encoded = await app.inject({
+      method: "GET",
+      url: `/api/files/..%2F..%2Fetc%2Fpasswd`,
+      headers: alice,
+    });
     expect(encoded.statusCode).toBe(400);
 
     // Plain "../" is normalized by the router before matching, so no files route is hit
-    const plain = await app.inject({ method: "GET", url: `/api/files/${prefix}/../../etc/passwd`, headers: alice });
+    const plain = await app.inject({
+      method: "GET",
+      url: `/api/files/${prefix}/../../etc/passwd`,
+      headers: alice,
+    });
     expect(plain.statusCode).toBe(404);
     await app.close();
   });
@@ -145,7 +153,12 @@ describe("files routes", () => {
     it("returns 501 when the storage provider cannot presign", async () => {
       const { app } = await setup({ presign: false });
 
-      const response = await app.inject({ method: "POST", url: "/api/files/upload-url", headers: alice, payload });
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/files/upload-url",
+        headers: alice,
+        payload,
+      });
 
       expect(response.statusCode).toBe(501);
       await app.close();
@@ -154,7 +167,12 @@ describe("files routes", () => {
     it("returns a presigned URL under the user's prefix", async () => {
       const { app } = await setup({ presign: true });
 
-      const response = await app.inject({ method: "POST", url: "/api/files/upload-url", headers: alice, payload });
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/files/upload-url",
+        headers: alice,
+        payload,
+      });
 
       expect(response.statusCode).toBe(200);
       const body = response.json<{ key: string; method: string; url: string; expiresAt: string }>();

@@ -15,7 +15,10 @@ describe("Logto auth provider", () => {
   let privateKey: PrivateKey;
   let otherKey: PrivateKey;
 
-  const sign = (claims: Record<string, unknown> = {}, options: { key?: PrivateKey; expiresIn?: string } = {}) =>
+  const sign = (
+    claims: Record<string, unknown> = {},
+    options: { key?: PrivateKey; expiresIn?: string } = {},
+  ) =>
     new SignJWT({ email: "logto@example.com", ...claims })
       .setProtectedHeader({ alg: "ES384", kid: "test" })
       .setSubject("logto_user_1")
@@ -51,8 +54,28 @@ describe("Logto auth provider", () => {
   });
 
   it.each([
-    ["wrong audience", () => new SignJWT({}).setProtectedHeader({ alg: "ES384", kid: "test" }).setSubject("u").setIssuer(`${ENDPOINT}/oidc`).setAudience("https://other").setExpirationTime("5m").sign(privateKey)],
-    ["wrong issuer", () => new SignJWT({}).setProtectedHeader({ alg: "ES384", kid: "test" }).setSubject("u").setIssuer("https://evil/oidc").setAudience(AUDIENCE).setExpirationTime("5m").sign(privateKey)],
+    [
+      "wrong audience",
+      () =>
+        new SignJWT({})
+          .setProtectedHeader({ alg: "ES384", kid: "test" })
+          .setSubject("u")
+          .setIssuer(`${ENDPOINT}/oidc`)
+          .setAudience("https://other")
+          .setExpirationTime("5m")
+          .sign(privateKey),
+    ],
+    [
+      "wrong issuer",
+      () =>
+        new SignJWT({})
+          .setProtectedHeader({ alg: "ES384", kid: "test" })
+          .setSubject("u")
+          .setIssuer("https://evil/oidc")
+          .setAudience(AUDIENCE)
+          .setExpirationTime("5m")
+          .sign(privateKey),
+    ],
     ["expired", () => sign({}, { expiresIn: "-1m" })],
     ["signed by another key", () => sign({}, { key: otherKey })],
     ["garbage", async () => "not.a.jwt"],

@@ -32,10 +32,16 @@ export const isContentTypeAllowed = (contentType: string, allowed: string[]): bo
 };
 
 export interface FilesService {
-  upload(userId: string, file: { filename: string; contentType: string; stream: Readable }): Promise<UploadedFile>;
+  upload(
+    userId: string,
+    file: { filename: string; contentType: string; stream: Readable },
+  ): Promise<UploadedFile>;
   download(userId: string, key: string): Promise<StoredObject>;
   delete(userId: string, key: string): Promise<void>;
-  createUploadUrl(userId: string, input: { filename: string; contentType: string }): Promise<PresignedUpload & { key: string }>;
+  createUploadUrl(
+    userId: string,
+    input: { filename: string; contentType: string },
+  ): Promise<PresignedUpload & { key: string }>;
 }
 
 export const createFilesService = (storage: StorageProvider, config: FilesConfig): FilesService => {
