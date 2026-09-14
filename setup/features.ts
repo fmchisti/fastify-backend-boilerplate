@@ -276,7 +276,7 @@ export type Selection = { [K in FeatureId]: keyof (typeof features)[K]["options"
 export const FEATURE_IDS = Object.keys(features) as FeatureId[];
 
 /** Always removed after setup unless --keep-setup. */
-export const SETUP_PATHS = ["setup", "test/setup"];
+export const SETUP_PATHS = ["setup", "test/setup", "docs/template.md"];
 export const SETUP_DEV_DEPENDENCIES = ["@clack/prompts", "tinyglobby"];
 export const SETUP_SCRIPTS = ["setup:project", "setup:verify"];
 

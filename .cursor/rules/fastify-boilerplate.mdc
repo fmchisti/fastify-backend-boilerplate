@@ -1,8 +1,11 @@
 ---
-description: Project conventions – read AGENTS.md
+description: Project rules – read AGENTS.md before changing code
 alwaysApply: true
 ---
 
-Follow [AGENTS.md](../../AGENTS.md) for structure, module pattern, and rules.
-Provider details (auth, ORM, storage): [docs/providers.md](../../docs/providers.md).
-Verify every change with `pnpm type-check && pnpm test`.
+Follow [AGENTS.md](../../AGENTS.md): workflow, definition of done, layout, module pattern, naming, API/auth/security rules, testing, and git conventions.
+
+- New CRUD resource: `pnpm gen:module <name> --fields "..."`, then customize.
+- Provider details (auth, ORM, storage, Redis): [docs/providers.md](../../docs/providers.md).
+- Keep `// @gen:` markers.
+- Verify every change: `pnpm check:fix && pnpm type-check && pnpm test`.

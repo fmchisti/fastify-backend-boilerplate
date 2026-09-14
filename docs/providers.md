@@ -59,12 +59,17 @@ Verifies Logto access tokens issued for an API resource, using the tenant JWKS (
 - Same adapter works for other OIDC providers issuing JWT access tokens (Auth0, Keycloak, Clerk, Cognito): change the issuer and JWKS URL.
 <!-- @setup-endif -->
 
-### Adding an auth provider
+### Adding or switching an auth provider
 
-1. Create `src/auth/providers/<id>/index.ts` exporting `createAuthProvider(context)` that returns an `AuthProvider`. Validate env inside with `loadEnv(schema)`. Accept injected clients in an options object so tests need no network.
-2. Add tests in `test/providers/<id>.test.ts`: build the app with `buildTestApp({ auth })` and call `/api/me`.
-3. Register the option in `setup/features.ts` (paths, dependencies, env).
-4. Run `pnpm setup:verify --only <id>`.
+1. Create `src/auth/providers/<id>/index.ts` exporting `createAuthProvider(context: AuthProviderContext)` that returns an `AuthProvider`. Validate env inside with `loadEnv(schema)`. Accept injected clients in an options object so tests need no network.
+2. Point `src/auth/index.ts` at it: `export { createAuthProvider } from "./providers/<id>/index.ts";`
+3. Add tests in `test/providers/<id>.test.ts`: build the app with `buildTestApp({ auth })` and call `/api/me`.
+4. Add its env vars to `.env.example`.
+<!-- @setup-template-only -->
+5. In the template: register the option in `setup/features.ts` and run `pnpm setup:verify --only <id>` (see [template.md](./template.md)).
+<!-- @setup-endif -->
+
+The same pattern applies to storage (`src/storage/index.ts`, `createStorage`).
 
 ## ORM
 

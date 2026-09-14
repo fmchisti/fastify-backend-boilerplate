@@ -78,7 +78,7 @@ pnpm dev
 ```
 
 - API docs: http://localhost:3000/api/docs
-- Liveness: `GET /api/health` · Readiness (checks DB): `GET /api/health/ready`
+- Liveness: `GET /api/health` · Readiness (database, Redis if used): `GET /api/health/ready`
 - Current user: `GET /api/me`
 - Example CRUD: `/api/todos`. Create your own with `pnpm gen:module product --fields "name:string price:float"`
 <!-- @setup-if storage=s3,local -->
@@ -94,15 +94,23 @@ pnpm dev
 | `pnpm type-check` | TypeScript check (src + tests) |
 | `pnpm check` / `pnpm check:fix` | Lint + format check (Biome) / apply fixes |
 | `pnpm test` | Unit, integration, and type tests |
-| `pnpm db:up` / `pnpm db:down` | Local Postgres in Docker |
-| `pnpm db:generate` | Generate a migration (Drizzle) or client (Prisma) |
-| `pnpm db:migrate` | Apply migrations (development) |
+| `pnpm db:up` / `pnpm db:down` | Local Postgres (and Redis, if used) in Docker |
 | `pnpm db:migrate:deploy` | Apply migrations in production (after `pnpm build`) |
 | `pnpm db:studio` | Browse the database |
 | `pnpm gen:module <name> --fields "..."` | Scaffold a CRUD module with table, migration, and tests |
+
+Schema changes:
+<!-- @setup-if orm=drizzle -->
+- Drizzle: `pnpm db:generate` creates a migration from `src/db/drizzle/schema`, `pnpm db:migrate` applies it.
+<!-- @setup-endif -->
+<!-- @setup-if orm=prisma -->
+- Prisma: `pnpm db:migrate` creates and applies a migration from `prisma/schema` and regenerates the client.
+<!-- @setup-endif -->
 <!-- @setup-template-only -->
-| `pnpm setup:project` | Choose providers (deletes the rest) |
-| `pnpm setup:verify` | Boilerplate maintainers: test every setup combination |
+
+Template only (removed by setup):
+- `pnpm setup:project`: choose providers, delete the rest
+- `pnpm setup:verify`: test every setup combination
 <!-- @setup-endif -->
 
 ## Project structure
@@ -110,16 +118,30 @@ pnpm dev
 ```
 src/
   app.ts            buildApp(): plugins, error handling, routes (no listen)
-  index.ts          starts the server
-  container.ts      dependencies (database, auth, repositories, storage); tests swap in fakes
+  index.ts          starts the server, graceful shutdown
+  container.ts      dependencies (database, auth, repositories, storage, redis); tests swap in fakes
   auth/             AuthProvider interface, middleware, providers/<name>
   db/               Database interface and the selected ORM client + schema
-  storage/          StorageProvider interface and providers/<name>
+  storage/          StorageProvider interface and providers/<name> (if selected)
+  redis/            shared Redis client (if selected)
   modules/<name>/   feature modules: routes, handler, service, schema, docs, repository
-  lib/              errors, pagination, basic auth
+  lib/              errors, pagination, crud, request id, shutdown, basic auth
   config/           env, logger, swagger
-test/               Vitest; fakes/ for providers, repositories/ contract tests on in-process Postgres
+scripts/            gen:module generator
+test/               Vitest: helpers, fakes/, repositories/ contract tests on in-process Postgres
+docs/               provider details
 ```
+
+## Working with AI assistants
+
+[AGENTS.md](./AGENTS.md) is the rulebook for humans and AI agents: workflow, definition of done, module pattern, naming, API and security rules, testing, and git conventions. Claude Code reads it through `CLAUDE.md`; Cursor through `.cursor/rules`; Codex, Copilot, and Gemini read `AGENTS.md` directly.
+
+Good prompts reference it, for example:
+
+- "Add a `products` module with name, price, and stock. Follow AGENTS.md, use `pnpm gen:module`, and make `pnpm type-check && pnpm test` pass."
+- "Add a stricter rate limit to `POST /api/auth/sign-in/email` and a test for it."
+
+Every change should end with `pnpm check:fix && pnpm type-check && pnpm test`.
 
 ## Production
 
@@ -166,5 +188,8 @@ Multi-stage image on `node:22-alpine`, production dependencies only, runs as the
 
 ## Learn more
 
-- [AGENTS.md](./AGENTS.md): conventions and how to add modules (for humans and AI agents)
-- [docs/providers.md](./docs/providers.md): auth, ORM, and storage details, and how to add a new provider
+- [AGENTS.md](./AGENTS.md): rules and workflow for humans and AI agents
+- [docs/providers.md](./docs/providers.md): auth, ORM, storage, and Redis details, and how to add a provider
+<!-- @setup-template-only -->
+- [docs/template.md](./docs/template.md): maintaining this boilerplate (setup CLI, directives, verify matrix)
+<!-- @setup-endif -->
