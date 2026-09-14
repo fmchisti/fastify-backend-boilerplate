@@ -1,12 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { parseEnv } from "../src/config/env";
+import { parseEnv } from "../src/config/env.ts";
 
 const validEnv = {
   DATABASE_URL: "postgresql://u:p@localhost:5432/db",
-  BACKEND_URL: "http://localhost:3000",
-  SUPABASE_URL: "https://x.supabase.co",
-  SUPABASE_ANON_KEY: "anon",
-  SUPABASE_SERVICE_KEY: "service",
 };
 
 describe("parseEnv", () => {
@@ -16,11 +12,14 @@ describe("parseEnv", () => {
     expect(env.PORT).toBe(3000);
     expect(env.HOST).toBe("0.0.0.0");
     expect(env.NODE_ENV).toBe("development");
-    expect(env.SESSION_DURATION_DAYS).toBe(7);
   });
 
   it("coerces PORT from a string", () => {
     expect(parseEnv({ ...validEnv, PORT: "8080" }).PORT).toBe(8080);
+  });
+
+  it("does not require any auth or storage provider variables", () => {
+    expect(() => parseEnv(validEnv)).not.toThrow();
   });
 
   it("lists every invalid variable in the error", () => {

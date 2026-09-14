@@ -1,6 +1,6 @@
-import { buildApp } from "./app";
-import { env } from "./config/env";
-import { logger } from "./config/logger";
+import { buildApp } from "./app.ts";
+import { env } from "./config/env.ts";
+import { logger } from "./config/logger.ts";
 
 const main = async (): Promise<void> => {
   const app = await buildApp();

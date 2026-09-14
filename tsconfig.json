@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "commonjs",
+    "module": "nodenext",
     "lib": [
       "ES2022"
     ],
@@ -16,19 +16,24 @@
     "noFallthroughCasesInSwitch": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "moduleResolution": "node",
+    "moduleResolution": "nodenext",
     "sourceMap": true,
-    "noEmit": true
+    "noEmit": true,
+    "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+    "esModuleInterop": true
   },
   "include": [
     "src/**/*",
     "test/**/*",
+    "setup/**/*",
     "vitest.config.mts",
-    "drizzle.config.ts"
+    "drizzle.config.ts",
+    "prisma.config.ts"
   ],
   "exclude": [
     "node_modules",

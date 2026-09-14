@@ -1,8 +1,8 @@
 // Compile-time checks: run by `vitest --typecheck` and `pnpm type-check`
 import { describe, expectTypeOf, it } from "vitest";
 import { z } from "zod";
-import type { AuthUser } from "../src/middleware/auth";
-import type { ZodRouteHandler } from "../src/types/fastify";
+import type { AuthUser } from "../src/auth/types.ts";
+import type { ZodRouteHandler } from "../src/types/fastify.ts";
 
 const CreateTodoSchema = {
   body: z.object({ title: z.string() }),

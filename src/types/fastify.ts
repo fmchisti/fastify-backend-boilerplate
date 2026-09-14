@@ -8,6 +8,18 @@ import type {
   RouteHandlerMethod,
 } from "fastify";
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
+import type { AuthProvider, AuthUser } from "../auth/types.ts";
+
+declare module "fastify" {
+  interface FastifyInstance {
+    /** Selected auth provider. Used by the auth middleware. */
+    auth: AuthProvider;
+  }
+  interface FastifyRequest {
+    /** Set by `authenticate` / `optionalAuth`. `null` for anonymous requests. */
+    user: AuthUser | null;
+  }
+}
 
 /**
  * Handler type inferred from a route's Zod schema.

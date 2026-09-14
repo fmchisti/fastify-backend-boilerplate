@@ -1,0 +1,248 @@
+/**
+ * Everything `pnpm setup:project` can select, and what each option owns.
+ *
+ * Adding a new provider (e.g. Clerk auth, GCS storage):
+ * 1. Implement the interface under src/<area>/providers/<id>/ with a `create*` factory.
+ * 2. Add an option below listing its paths, dependencies, and env vars.
+ * 3. Run `pnpm setup:verify` to type-check and test every combination.
+ */
+
+export interface EnvEntry {
+  key: string;
+  example: string;
+  comment?: string;
+}
+
+export interface OptionManifest {
+  label: string;
+  hint?: string;
+  /**
+   * Files/directories that exist only for this option.
+   * A path listed by several options of the same feature is kept if any of them is selected.
+   * A path listed by several features is kept only if every feature keeps it.
+   */
+  paths?: string[];
+  dependencies?: string[];
+  devDependencies?: string[];
+  scripts?: Record<string, string>;
+  env?: EnvEntry[];
+  /** Printed after setup. */
+  nextSteps?: string[];
+}
+
+export interface FeatureManifest {
+  label: string;
+  default: string;
+  options: Record<string, OptionManifest>;
+}
+
+const files = {
+  paths: ["src/storage", "src/modules/files", "test/files.test.ts", "test/fakes/storage.ts"],
+  dependencies: ["@fastify/multipart"],
+  env: [
+    { key: "UPLOAD_MAX_FILE_SIZE_MB", example: "10" },
+    {
+      key: "UPLOAD_ALLOWED_CONTENT_TYPES",
+      example: "image/png,image/jpeg,image/webp,image/gif,application/pdf",
+      comment: "Avoid image/svg+xml and text/html: they can run scripts",
+    },
+  ],
+} satisfies Partial<OptionManifest>;
+
+export const features = {
+  auth: {
+    label: "Auth provider",
+    default: "better-auth",
+    options: {
+      "better-auth": {
+        label: "Better Auth",
+        hint: "self-hosted: users & sessions in your Postgres, email/password + social",
+        paths: [
+          "src/auth/providers/better-auth",
+          "src/db/drizzle/schema/auth.ts",
+          "prisma/schema/auth.prisma",
+          "test/providers/better-auth.test.ts",
+        ],
+        dependencies: ["better-auth"],
+        env: [
+          { key: "BETTER_AUTH_URL", example: "http://localhost:3000", comment: "Public URL of this API" },
+          { key: "BETTER_AUTH_SECRET", example: "", comment: "openssl rand -base64 32" },
+        ],
+        nextSteps: [
+          "Set BETTER_AUTH_SECRET (openssl rand -base64 32)",
+          "Auth endpoints live under /api/auth (e.g. POST /api/auth/sign-up/email)",
+        ],
+      },
+      supabase: {
+        label: "Supabase Auth",
+        hint: "verifies Supabase access tokens",
+        paths: ["src/auth/providers/supabase", "test/providers/supabase.test.ts"],
+        dependencies: ["@supabase/supabase-js"],
+        env: [
+          { key: "SUPABASE_URL", example: "https://your-project.supabase.co" },
+          { key: "SUPABASE_ANON_KEY", example: "" },
+        ],
+        nextSteps: ["Enable asymmetric JWT signing keys in Supabase for local token verification"],
+      },
+      firebase: {
+        label: "Firebase Auth",
+        hint: "verifies Firebase ID tokens",
+        paths: ["src/auth/providers/firebase", "test/providers/firebase.test.ts"],
+        dependencies: ["firebase-admin"],
+        env: [
+          { key: "FIREBASE_PROJECT_ID", example: "your-project-id" },
+          { key: "FIREBASE_CLIENT_EMAIL", example: "", comment: "Optional: service account, needed for other Admin APIs" },
+          { key: "FIREBASE_PRIVATE_KEY", example: "", comment: "Optional: keep \\n escapes on one line" },
+        ],
+      },
+      logto: {
+        label: "Logto",
+        hint: "verifies Logto API resource access tokens (OIDC/JWKS)",
+        paths: ["src/auth/providers/logto", "test/providers/logto.test.ts"],
+        dependencies: ["jose"],
+        env: [
+          { key: "LOGTO_ENDPOINT", example: "https://your-tenant.logto.app" },
+          { key: "LOGTO_API_RESOURCE", example: "https://api.example.com", comment: "API resource indicator" },
+        ],
+        nextSteps: ["Create an API resource in Logto and request tokens for it from your client"],
+      },
+    },
+  },
+
+  orm: {
+    label: "ORM",
+    default: "drizzle",
+    options: {
+      drizzle: {
+        label: "Drizzle",
+        hint: "SQL-like TypeScript queries, schema in TS",
+        paths: [
+          "src/db/drizzle",
+          "drizzle.config.ts",
+          "drizzle",
+          "src/modules/todos/repository/drizzle.ts",
+          "src/auth/providers/better-auth/database/drizzle.ts",
+          "test/repositories/todos.drizzle.test.ts",
+        ],
+        dependencies: ["drizzle-orm"],
+        devDependencies: ["drizzle-kit"],
+        scripts: {
+          "db:generate": "drizzle-kit generate",
+          "db:migrate": "drizzle-kit migrate",
+          "db:push": "drizzle-kit push",
+          "db:studio": "drizzle-kit studio",
+        },
+        nextSteps: ["Schema: src/db/drizzle/schema. After changes: pnpm db:generate && pnpm db:migrate"],
+      },
+      prisma: {
+        label: "Prisma",
+        hint: "schema-first with generated client",
+        paths: [
+          "src/db/prisma",
+          "prisma",
+          "prisma.config.ts",
+          "src/generated",
+          "src/modules/todos/repository/prisma.ts",
+          "src/auth/providers/better-auth/database/prisma.ts",
+          "test/repositories/todos.prisma.test.ts",
+        ],
+        dependencies: ["@prisma/client", "@prisma/adapter-pg"],
+        devDependencies: ["prisma"],
+        scripts: {
+          postinstall: "prisma generate",
+          "db:generate": "prisma generate",
+          "db:migrate": "prisma migrate deploy",
+          "db:migrate:dev": "prisma migrate dev",
+          "db:push": "prisma db push",
+          "db:studio": "prisma studio",
+        },
+        nextSteps: ["Schema: prisma/schema. After changes: pnpm db:migrate:dev (creates migration + client)"],
+      },
+    },
+  },
+
+  storage: {
+    label: "File storage",
+    default: "s3",
+    options: {
+      s3: {
+        label: "S3-compatible",
+        hint: "AWS S3, Cloudflare R2, MinIO, Railway Buckets",
+        paths: [...files.paths, "src/storage/providers/s3", "test/storage/s3.test.ts"],
+        dependencies: [
+          ...files.dependencies,
+          "@aws-sdk/client-s3",
+          "@aws-sdk/lib-storage",
+          "@aws-sdk/s3-request-presigner",
+        ],
+        devDependencies: ["aws-sdk-client-mock", "@smithy/util-stream"],
+        env: [
+          { key: "S3_BUCKET", example: "my-bucket" },
+          { key: "S3_REGION", example: "us-east-1" },
+          { key: "S3_ENDPOINT", example: "", comment: "Only for S3-compatible services (R2, MinIO, Railway)" },
+          { key: "S3_FORCE_PATH_STYLE", example: "false", comment: "true for MinIO" },
+          { key: "S3_ACCESS_KEY_ID", example: "", comment: "Omit both keys to use the AWS default credential chain" },
+          { key: "S3_SECRET_ACCESS_KEY", example: "" },
+          ...files.env,
+        ],
+        nextSteps: ["Configure bucket CORS to allow PUT from your frontend if you use presigned uploads"],
+      },
+      local: {
+        label: "Local disk",
+        hint: "development / single server; no presigned URLs",
+        paths: [...files.paths, "src/storage/providers/local", "test/storage/local.test.ts"],
+        dependencies: [...files.dependencies],
+        env: [{ key: "LOCAL_STORAGE_DIR", example: "./uploads" }, ...files.env],
+      },
+      none: {
+        label: "None",
+        hint: "no file uploads",
+      },
+    },
+  },
+
+  deploy: {
+    label: "Deploy target",
+    default: "none",
+    options: {
+      railway: {
+        label: "Railway",
+        hint: "adds railway.json (migrations before deploy, readiness health check)",
+        paths: ["railway.json"],
+        scripts: { deploy: "railway up" },
+        nextSteps: ["Railway: add a Postgres service and set DATABASE_URL=${{Postgres.DATABASE_URL}}"],
+      },
+      none: {
+        label: "None / decide later",
+      },
+    },
+  },
+} satisfies Record<string, FeatureManifest>;
+
+export type FeatureId = keyof typeof features;
+export type Selection = { [K in FeatureId]: keyof (typeof features)[K]["options"] & string };
+
+export const FEATURE_IDS = Object.keys(features) as FeatureId[];
+
+/** Always removed after setup unless --keep-setup. */
+export const SETUP_PATHS = ["setup", "test/setup"];
+export const SETUP_DEV_DEPENDENCIES = ["@clack/prompts", "tinyglobby"];
+export const SETUP_SCRIPTS = ["setup:project", "setup:verify"];
+
+export const CORE_ENV: EnvEntry[] = [
+  { key: "NODE_ENV", example: "development" },
+  { key: "PORT", example: "3000" },
+  { key: "HOST", example: "0.0.0.0" },
+  { key: "LOG_LEVEL", example: "info" },
+  { key: "BACKEND_URL", example: "http://localhost:3000", comment: "Public URL of this API (OpenAPI servers)" },
+  { key: "FRONTEND_URL", example: "http://localhost:5173", comment: "Allowed CORS origin" },
+  {
+    key: "DATABASE_URL",
+    example: "postgresql://postgres:postgres@localhost:5432/app",
+    comment:
+      "Docker: pnpm db:up. Railway: ${{Postgres.DATABASE_URL}}. Supabase: Project Settings > Database > Connection string",
+  },
+  { key: "DATABASE_POOL_MAX", example: "10", comment: "Max DB connections per instance" },
+  { key: "DOCS_USERNAME", example: "", comment: "When both set, /api/docs requires HTTP Basic Auth" },
+  { key: "DOCS_PASSWORD", example: "" },
+];

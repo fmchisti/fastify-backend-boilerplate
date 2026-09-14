@@ -1,0 +1,13 @@
+// Keep in sync with src/db/drizzle/schema/todos.ts
+model Todo {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  // Auth provider user id. No foreign key, so any auth provider works.
+  userId    String   @map("user_id")
+  title     String   @db.VarChar(200)
+  completed Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([userId, createdAt], map: "todos_user_id_created_at_idx")
+  @@map("todos")
+}

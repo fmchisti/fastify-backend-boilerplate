@@ -1,0 +1,13 @@
+// Prisma schema root. Models live in the other .prisma files in this folder.
+// After editing: pnpm db:generate (client) and pnpm db:migrate:dev (migration).
+
+generator client {
+  provider               = "prisma-client"
+  output                 = "../../src/generated/prisma"
+  moduleFormat           = "esm"
+  importFileExtension    = "ts"
+}
+
+datasource db {
+  provider = "postgresql"
+}
