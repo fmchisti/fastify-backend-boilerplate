@@ -120,7 +120,8 @@ const main = async () => {
 
   if (!values["skip-install"]) {
     p.log.step("Installing dependencies");
-    run("pnpm", ["install"], cwd);
+    // Setup edits package.json on purpose; CI environments default to a frozen lockfile
+    run("pnpm", ["install", "--no-frozen-lockfile"], cwd);
   }
   // Always regenerate: the initial migration must match the selected schema
   p.log.step("Generating database migrations");
