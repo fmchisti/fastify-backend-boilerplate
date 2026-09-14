@@ -6,7 +6,7 @@ Create a type-safe Fastify + TypeScript API from [Fastra](https://github.com/fmc
 pnpm create fastra shop-api
 ```
 
-It downloads the template, installs dependencies, runs Fastra's setup (you choose auth, database, storage, Redis, and deploy target, each optional; everything else is deleted), and creates a git repository with an initial commit.
+It downloads the template (a few seconds), asks for the project name and your choices (auth, database, storage, Redis, and deploy target, each optional), and only after you confirm installs dependencies, builds the project from your answers (everything you did not choose is deleted), and creates a git repository with an initial commit. Cancel at any question and the downloaded files are removed.
 
 Non-interactive:
 

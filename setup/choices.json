@@ -1,0 +1,123 @@
+{
+  "version": 1,
+  "features": [
+    {
+      "id": "auth",
+      "label": "Auth provider",
+      "default": "better-auth",
+      "options": [
+        {
+          "value": "better-auth",
+          "label": "Better Auth",
+          "hint": "self-hosted: users & sessions in your Postgres, email/password + social",
+          "requires": {
+            "orm": ["drizzle", "prisma"]
+          }
+        },
+        {
+          "value": "supabase",
+          "label": "Supabase Auth",
+          "hint": "verifies Supabase access tokens"
+        },
+        {
+          "value": "firebase",
+          "label": "Firebase Auth",
+          "hint": "verifies Firebase ID tokens"
+        },
+        {
+          "value": "logto",
+          "label": "Logto",
+          "hint": "verifies Logto API resource access tokens (OIDC/JWKS)"
+        },
+        {
+          "value": "none",
+          "label": "None",
+          "hint": "public API without user accounts"
+        }
+      ]
+    },
+    {
+      "id": "orm",
+      "label": "Database (ORM)",
+      "default": "drizzle",
+      "options": [
+        {
+          "value": "drizzle",
+          "label": "Drizzle",
+          "hint": "SQL-like TypeScript queries, schema in TS"
+        },
+        {
+          "value": "prisma",
+          "label": "Prisma",
+          "hint": "schema-first with generated client"
+        },
+        {
+          "value": "none",
+          "label": "None",
+          "hint": "no database, e.g. an API that only calls other services"
+        }
+      ]
+    },
+    {
+      "id": "storage",
+      "label": "File storage",
+      "default": "s3",
+      "options": [
+        {
+          "value": "s3",
+          "label": "S3-compatible",
+          "hint": "AWS S3, Cloudflare R2, MinIO, Railway Buckets (needs auth: files belong to users)",
+          "requires": {
+            "auth": ["better-auth", "supabase", "firebase", "logto"]
+          }
+        },
+        {
+          "value": "local",
+          "label": "Local disk",
+          "hint": "development / single server; no presigned URLs (needs auth)",
+          "requires": {
+            "auth": ["better-auth", "supabase", "firebase", "logto"]
+          }
+        },
+        {
+          "value": "none",
+          "label": "None",
+          "hint": "no file uploads"
+        }
+      ]
+    },
+    {
+      "id": "redis",
+      "label": "Redis",
+      "default": "none",
+      "options": [
+        {
+          "value": "none",
+          "label": "None",
+          "hint": "rate limits in memory (per instance)"
+        },
+        {
+          "value": "redis",
+          "label": "Redis",
+          "hint": "shared rate limits across instances, readiness check; reuse for caching"
+        }
+      ]
+    },
+    {
+      "id": "deploy",
+      "label": "Deploy target",
+      "default": "none",
+      "options": [
+        {
+          "value": "railway",
+          "label": "Railway",
+          "hint": "adds railway.json (migrations before deploy, readiness health check)"
+        },
+        {
+          "value": "none",
+          "label": "None / decide later"
+        }
+      ]
+    }
+  ]
+}

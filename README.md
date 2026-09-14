@@ -64,7 +64,7 @@ Type-safe Fastify + TypeScript API.
 
 Pick one way to get a copy. Each starts with a clean git history, not linked to Fastra.
 
-**With `pnpm create`** (downloads, installs, runs setup, and makes the first commit):
+**With `pnpm create`** (asks every question first, then installs, builds the project, and makes the first commit):
 
 ```bash
 pnpm create fastra my-api
@@ -186,6 +186,7 @@ Schema changes:
 Template only (removed by setup):
 - `pnpm setup:project`: choose providers, delete the rest
 - `pnpm setup:verify`: test every setup combination
+- `pnpm setup:choices`: rewrite `setup/choices.json` (the questions `pnpm create fastra` asks) after changing `setup/features.ts`
 - `pnpm build:create`: build the `create-fastra` package (see [docs/template.md](./docs/template.md))
 <!-- @setup-endif -->
 

@@ -322,7 +322,7 @@ export const FEATURE_IDS = Object.keys(features) as FeatureId[];
 /** Always removed after setup unless --keep-setup. */
 export const SETUP_PATHS = ["setup", "test/setup", "docs/template.md", "packages"];
 export const SETUP_DEV_DEPENDENCIES = ["@clack/prompts", "tinyglobby", "giget"];
-export const SETUP_SCRIPTS = ["setup:project", "setup:verify", "build:create"];
+export const SETUP_SCRIPTS = ["setup:project", "setup:verify", "setup:choices", "build:create"];
 
 /** Kept or removed based on combinations of features. */
 export const CONDITIONAL: ConditionalManifest[] = [

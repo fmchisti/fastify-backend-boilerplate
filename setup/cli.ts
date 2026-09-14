@@ -44,7 +44,14 @@ const inheritRunner: Runner = async (command, args, options) => {
 
 const isGitDirty = (cwd: string): boolean => {
   try {
-    return execFileSync("git", ["status", "--porcelain"], { cwd, encoding: "utf8" }).trim().length > 0;
+    return (
+      execFileSync("git", ["status", "--porcelain"], {
+        cwd,
+        encoding: "utf8",
+        // Outside a git repository git prints "fatal: not a git repository"; that is expected here
+        stdio: ["ignore", "pipe", "ignore"],
+      }).trim().length > 0
+    );
   } catch {
     return false; // not a git repo
   }

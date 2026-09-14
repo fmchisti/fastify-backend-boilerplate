@@ -43,7 +43,7 @@ The template compiles and runs with every option present at once: `@setup-select
 2. Add tests next to the others (`test/providers/<id>.test.ts`, …) using injected fakes, no network.
 3. Add the option to `setup/features.ts`: `paths`, `dependencies`, `devDependencies`, `scripts`, `env`, `nextSteps`, and `requires` if it only works with some options of another feature. Install dependencies in the template's `package.json`.
 4. Add `@setup-if` blocks where the option changes shared files (Dockerfile, CI env, docs).
-5. Run `pnpm setup:verify --only <id>`, then the full matrix.
+5. Run `pnpm setup:choices` (so `pnpm create fastra` asks about it), then `pnpm setup:verify --only <id>`, then the full matrix.
 
 Adding a whole feature (a new question): add it to `features`, the CLI flags in `setup/cli.ts`, the matrix in `setup/verify.ts`, and `test/setup/engine.test.ts` if the engine changes.
 
@@ -61,7 +61,9 @@ CI runs the matrix (`setup-matrix` job) and a Docker smoke test for a Drizzle an
 
 ## `create-fastra` package
 
-`packages/create-fastra/` is the `pnpm create fastra` CLI. It downloads the template with giget (skipping `packages/`, `node_modules`, `.env`, …), runs `pnpm install` and `pnpm setup:project` (forwarding every option it does not own), then creates a git repository with an initial commit. Setup removes `packages/` from generated projects.
+`packages/create-fastra/` is the `pnpm create fastra` CLI. It downloads the template with giget (skipping `packages/`, `node_modules`, `.env`, …), then asks the project name and every choice **before installing anything**, using `setup/choices.json` (the questions and `requires` rules from `setup/features.ts` as plain JSON). After the user confirms it runs `pnpm install` and `pnpm setup:project --name … --auth … --yes` (forwarding any other options), then creates a git repository with an initial commit. Cancelling removes the downloaded files. Setup removes `packages/` from generated projects.
+
+After changing `setup/features.ts`, run `pnpm setup:choices` to rewrite `setup/choices.json`; `test/setup/choices.test.ts` fails if it is stale or if the CLI's option filtering disagrees with the setup engine. Templates without `choices.json` fall back to letting setup ask after install.
 
 - Code: `src/cli.ts` (argument parsing, target checks, template fetching) and `src/index.ts` (the interactive flow). Tests: `packages/create-fastra/test/`, run by the root `pnpm test`.
 - `--template` accepts a giget source (`gh:fmchisti/fastra#v1.0.0`) or a local folder, which CI uses to test the current commit.
