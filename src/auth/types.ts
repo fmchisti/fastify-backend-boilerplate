@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
+import type { AppDatabase } from "../db/index.ts";
 
 /** Provider-independent user identity attached to `request.user`. */
 export interface AuthUser {
@@ -23,4 +24,12 @@ export interface AuthProvider {
   /** Routes the provider serves itself, registered under `/api/auth` (e.g. Better Auth sign-in). */
   readonly routes?: FastifyPluginAsync;
   close?(): Promise<void>;
+}
+
+/** Passed to every provider's `createAuthProvider`. Providers use only what they need. */
+export interface AuthProviderContext {
+  /** Lazily creates the database connection (only self-hosted auth needs it). */
+  database: () => AppDatabase;
+  /** Browser origins allowed to call the API (CORS_ORIGINS plus localhost in development). */
+  trustedOrigins: string[];
 }

@@ -222,7 +222,7 @@ export const renderEnvExample = (selection: Record<string, string>, manifest: Fe
 // Apply to a directory
 // ---------------------------------------------------------------------------
 
-const DIRECTIVE_FILE_GLOBS = ["**/*.{ts,mts,prisma,md,mdc,yml,yaml}", ".cursor/**/*.mdc"];
+const DIRECTIVE_FILE_GLOBS = ["**/*.{ts,mts,prisma,md,mdc,yml,yaml}", "**/Dockerfile", ".cursor/**/*.mdc"];
 const IGNORE_GLOBS = ["**/node_modules/**", "**/dist/**", "src/generated/**", ".git/**"];
 
 export interface ApplyOptions {

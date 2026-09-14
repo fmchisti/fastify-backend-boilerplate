@@ -18,41 +18,71 @@ export const loadEnv = <TSchema extends z.ZodType>(
   return result.data;
 };
 
-const coreEnvSchema = z.object({
-  NODE_ENV: z
-    .enum(["development", "production", "test"], {
-      message: "NODE_ENV must be 'development', 'production', or 'test'",
-    })
-    .default("development"),
-  PORT: z.coerce
-    .number<string>("PORT must be a number")
-    .int()
-    .positive()
-    .default(3000),
-  HOST: z.string().min(1).default("0.0.0.0"),
-  LOG_LEVEL: z
-    .enum(["trace", "debug", "info", "warn", "error", "fatal", "silent"])
-    .optional(),
+const booleanString = z.enum(["true", "false"]).transform((value) => value === "true");
 
-  // Public URL of this API (used in OpenAPI servers)
-  BACKEND_URL: z.url("BACKEND_URL must be a valid URL").optional(),
-  // Frontend origin allowed by CORS
-  FRONTEND_URL: z.url("FRONTEND_URL must be a valid URL").optional(),
+const commaList = z
+  .string()
+  .transform((value) => value.split(",").map((item) => item.trim()).filter(Boolean));
 
-  // PostgreSQL connection string (local, Docker, Railway, Supabase, Neon, RDS, ...)
-  DATABASE_URL: z.url("DATABASE_URL must be a valid postgres:// URL"),
-  // Max connections per instance. Lower it on plans with connection limits.
-  DATABASE_POOL_MAX: z.coerce.number<string>().int().positive().default(10),
+/**
+ * Fastify `trustProxy`: "false" (default), "true" (trust all), a hop count ("1"),
+ * or comma-separated IPs/CIDRs ("10.0.0.0/8,127.0.0.1").
+ * Enable behind a reverse proxy (Railway, Render, Fly, a load balancer) so
+ * `request.ip` and rate limiting use the real client address.
+ */
+export const TrustProxySchema = z
+  .string()
+  .default("false")
+  .transform((value): boolean | number | string[] => {
+    if (value === "true") return true;
+    if (value === "false" || value === "") return false;
+    if (/^\d+$/.test(value)) return Number(value);
+    return value.split(",").map((item) => item.trim()).filter(Boolean);
+  });
 
-  // API docs (optional – when both set, /api/docs is protected with HTTP Basic Auth)
-  DOCS_USERNAME: z.string().min(1).optional(),
-  DOCS_PASSWORD: z.string().min(1).optional(),
-});
+const coreEnvSchema = z
+  .object({
+    NODE_ENV: z
+      .enum(["development", "production", "test"], {
+        message: "NODE_ENV must be 'development', 'production', or 'test'",
+      })
+      .default("development"),
+    PORT: z.coerce.number<string>("PORT must be a number").int().positive().default(3000),
+    HOST: z.string().min(1).default("0.0.0.0"),
+    LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error", "fatal", "silent"]).optional(),
+
+    // Public URL of this API (used in OpenAPI servers)
+    BACKEND_URL: z.url("BACKEND_URL must be a valid URL").optional(),
+    // Browser origins allowed by CORS (and Better Auth), comma-separated
+    CORS_ORIGINS: commaList.pipe(z.array(z.url("CORS_ORIGINS must be comma-separated URLs"))).default([]),
+    TRUST_PROXY: TrustProxySchema,
+
+    // PostgreSQL connection string (local, Docker, Railway, Supabase, Neon, RDS, ...)
+    DATABASE_URL: z.url("DATABASE_URL must be a valid postgres:// URL"),
+    // Max connections per instance. Lower it on plans with connection limits.
+    DATABASE_POOL_MAX: z.coerce.number<string>().int().positive().default(10),
+
+    // Per-IP request limit for all routes except health checks
+    RATE_LIMIT_MAX: z.coerce.number<string>().int().positive().default(300),
+    RATE_LIMIT_WINDOW: z.string().min(1).default("1 minute"),
+
+    // Seconds to finish in-flight requests on SIGTERM before forcing exit
+    SHUTDOWN_TIMEOUT_SECONDS: z.coerce.number<string>().positive().default(10),
+
+    // API docs: enabled by default except in production.
+    // When DOCS_USERNAME and DOCS_PASSWORD are set, /api/docs requires HTTP Basic Auth.
+    DOCS_ENABLED: booleanString.optional(),
+    DOCS_USERNAME: z.string().min(1).optional(),
+    DOCS_PASSWORD: z.string().min(1).optional(),
+  })
+  .transform(({ DOCS_ENABLED, ...env }) => ({
+    ...env,
+    DOCS_ENABLED: DOCS_ENABLED ?? env.NODE_ENV !== "production",
+  }));
 
 export type Env = z.infer<typeof coreEnvSchema>;
 
-/** Validate core env. Exported so tests can check parsing without touching process.env. */
-export const parseEnv = (source: NodeJS.ProcessEnv): Env =>
-  loadEnv(coreEnvSchema, source);
+/** Validate core env. Exported so tests can build variants without touching process.env. */
+export const parseEnv = (source: NodeJS.ProcessEnv): Env => loadEnv(coreEnvSchema, source);
 
 export const env: Env = parseEnv(process.env);

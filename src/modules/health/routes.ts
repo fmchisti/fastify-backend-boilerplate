@@ -14,6 +14,8 @@ const healthRoutes: FastifyPluginAsyncZod<HealthRoutesOptions> = async (fastify,
   fastify.route({
     method: "GET",
     url: "/health",
+    // Probes must never be rate limited
+    config: { rateLimit: false },
     schema: { ...HealthCheckSchema, ...healthCheckDocs },
     handler: healthCheckHandler,
   });
@@ -22,6 +24,7 @@ const healthRoutes: FastifyPluginAsyncZod<HealthRoutesOptions> = async (fastify,
   fastify.route({
     method: "GET",
     url: "/health/ready",
+    config: { rateLimit: false },
     schema: {
       ...readinessDocs,
       response: { 200: ReadinessResponseSchema, 503: ErrorResponseSchema },

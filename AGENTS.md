@@ -78,7 +78,14 @@ Do not add other top-level folders under `src/` (e.g. `utils/`, `services/`). Pu
 - New variables also go in `setup/features.ts` (env entries) so `.env.example` is generated correctly.
 
 ### Logging
-- In requests use `request.log`. Pino signature is `log.info(obj, msg)`, object first.
+- In requests use `request.log` (includes `requestId`). Pino signature is `log.info(obj, msg)`, object first.
+- Never log tokens, passwords, or full headers. Authorization and cookie headers are redacted in `src/config/logger.ts`; add new secret paths there.
+
+### Production behaviour
+- Every route is rate limited per client IP. Opt out only for probes: `config: { rateLimit: false }`. Stricter limits: `config: { rateLimit: { max: 5, timeWindow: "1 minute" } }`.
+- Core config is passed to `buildApp(overrides, { env })`. Read config from that `env`, not from module-level imports, so tests can vary it with `testEnv({ ... })`.
+- Resources that need cleanup (connections, clients) must close in an `onClose` hook or the provider's `close()`, so graceful shutdown works.
+- Never trust client-sent IP headers directly. Use `request.ip`, which respects `TRUST_PROXY`.
 
 ### Database
 - Only repositories import ORM clients (`src/db/<orm>/`). Services and handlers depend on repository interfaces.
@@ -91,5 +98,5 @@ Do not add other top-level folders under `src/` (e.g. `utils/`, `services/`). Pu
 
 - Details on each provider and adding new ones: [docs/providers.md](./docs/providers.md).
 <!-- @setup-if deploy=railway -->
-- Deploy config: `railway.json` runs `pnpm db:migrate` before deploy and health-checks `/api/health/ready`.
+- Deploy config: `railway.json` runs `pnpm db:migrate:deploy` before deploy and health-checks `/api/health/ready`.
 <!-- @setup-endif -->

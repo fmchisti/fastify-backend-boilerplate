@@ -16,6 +16,17 @@ export const loggerOptions: LoggerOptions = {
       },
     },
   }),
+  // Never write credentials to logs, even if a serializer or a developer logs headers
+  redact: {
+    paths: [
+      "req.headers.authorization",
+      "req.headers.cookie",
+      'res.headers["set-cookie"]',
+      "headers.authorization",
+      "headers.cookie",
+    ],
+    censor: "[redacted]",
+  },
   formatters: {
     level: (label) => ({ level: label }),
   },

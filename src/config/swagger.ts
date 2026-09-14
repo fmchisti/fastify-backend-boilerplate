@@ -3,9 +3,10 @@ import type { FastifySwaggerUiOptions } from "@fastify/swagger-ui";
 import { jsonSchemaTransform } from "fastify-type-provider-zod";
 import { isValidBasicAuth } from "../lib/basic-auth.ts";
 import { HttpError } from "../lib/errors.ts";
-import { env } from "./env.ts";
+import { APP_VERSION } from "./app-info.ts";
+import type { Env } from "./env.ts";
 
-export const swaggerOptions: FastifyDynamicSwaggerOptions = {
+export const createSwaggerOptions = (env: Env): FastifyDynamicSwaggerOptions => ({
   transform: jsonSchemaTransform,
   openapi: {
     openapi: "3.1.0",
@@ -13,7 +14,7 @@ export const swaggerOptions: FastifyDynamicSwaggerOptions = {
       title: "Fastify API",
       description:
         "A type-safe Fastify backend API. Add your own routes and modules under `src/modules`.",
-      version: "1.0.0",
+      version: APP_VERSION,
       contact: {
         name: "API Support",
       },
@@ -44,9 +45,9 @@ export const swaggerOptions: FastifyDynamicSwaggerOptions = {
       },
     },
   },
-};
+});
 
-export const swaggerUiOptions: FastifySwaggerUiOptions = {
+export const createSwaggerUiOptions = (env: Env): FastifySwaggerUiOptions => ({
   routePrefix: "/api/docs",
   uiConfig: {
     docExpansion: "list",
@@ -73,4 +74,4 @@ export const swaggerUiOptions: FastifySwaggerUiOptions = {
   theme: {
     title: "API Documentation",
   },
-};
+});
