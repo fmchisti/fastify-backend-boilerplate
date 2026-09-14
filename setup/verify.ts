@@ -66,6 +66,19 @@ const verify = async (selection: Selection): Promise<Result> => {
     await applySelection(dir, selection, { removeSetup: true });
     await regenerateDatabaseArtifacts(dir, selection.orm);
     await formatProject(dir);
+    // The module generator must produce working code for every selection
+    await exec(
+      "pnpm",
+      [
+        "exec",
+        "tsx",
+        "scripts/gen-module.ts",
+        "product-item",
+        "--fields",
+        "title:string notes:text? quantity:int price:float active:boolean releasedAt:datetime?",
+      ],
+      { cwd: dir },
+    );
     await exec("pnpm", ["exec", "tsc", "--noEmit"], { cwd: dir });
     // Generated projects must also be lint- and format-clean (no leftovers from directives)
     await exec("pnpm", ["exec", "biome", "check", "--error-on-warnings", "."], { cwd: dir });

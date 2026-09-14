@@ -29,6 +29,7 @@ export const createSwaggerOptions = (env: Env): FastifyDynamicSwaggerOptions => 
       { name: "Health", description: "Health check endpoints" },
       { name: "Auth", description: "Current user" },
       { name: "Todos", description: "Example CRUD module" },
+      // @gen:tags
       // @setup-if storage=s3,local
       { name: "Files", description: "File uploads" },
       // @setup-endif

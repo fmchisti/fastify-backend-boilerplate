@@ -50,6 +50,17 @@ Do not add other top-level folders under `src/` (e.g. `utils/`, `services/`). Pu
 
 ### Adding a module
 
+**Standard user-owned CRUD resource:** generate it, then edit.
+
+```bash
+pnpm gen:module product --fields "name:string price:float stock:int description:text? releasedAt:datetime?"
+pnpm db:migrate
+```
+
+Types: `string` (≤255), `text`, `int`, `float`, `boolean`, `datetime`; `?` = nullable. It creates the files below for the project's ORM, the table and migration, registers the module in `app.ts`, `container.ts`, `swagger.ts`, and `test/helpers.ts` (at the `// @gen:` markers, keep them), and writes route and repository contract tests. Use `--plural` for irregular names and `--dry-run` to preview.
+
+**Anything else (custom queries, no user ownership, relations):** generate as a starting point or copy `src/modules/todos/`, then:
+
 1. Create the files above. Add tables to the ORM schema (`src/db/drizzle/schema/` or `prisma/schema/`), then `pnpm db:generate`.
 2. Add the repository to `AppDependencies` in `src/container.ts`.
 3. Register in `src/app.ts`: `await app.register(xRoutes, { prefix: "/api", repository: deps.x })`.

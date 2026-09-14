@@ -27,6 +27,7 @@
     "src/**/*",
     "test/**/*",
     "setup/**/*",
+    "scripts/**/*",
     "vitest.config.mts",
     "drizzle.config.ts",
     "prisma.config.ts"

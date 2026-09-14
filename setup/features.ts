@@ -131,6 +131,7 @@ export const features = {
           "src/modules/todos/repository/drizzle.ts",
           "src/auth/providers/better-auth/database/drizzle.ts",
           "test/repositories/todos.drizzle.test.ts",
+          "test/repositories/drizzle-harness.ts",
           "test/repositories/drizzle-migrate.test.ts",
         ],
         dependencies: ["drizzle-orm"],
@@ -156,6 +157,7 @@ export const features = {
           "src/modules/todos/repository/prisma.ts",
           "src/auth/providers/better-auth/database/prisma.ts",
           "test/repositories/todos.prisma.test.ts",
+          "test/repositories/prisma-harness.ts",
         ],
         // prisma CLI is a runtime dependency so `migrate deploy` works in production images
         dependencies: ["@prisma/client", "@prisma/adapter-pg", "prisma"],

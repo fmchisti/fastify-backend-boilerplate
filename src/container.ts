@@ -13,6 +13,7 @@ export interface AppDependencies {
   database: Database;
   auth: AuthProvider;
   todos: TodoRepository;
+  // @gen:dependencies (pnpm gen:module inserts repositories above)
   // @setup-if storage=s3,local
   storage: StorageProvider;
   // @setup-endif
@@ -33,6 +34,7 @@ export const createDependencies = (
   return {
     auth: overrides.auth ?? createAuthProvider({ database: getDatabase, trustedOrigins: config.corsOrigins }),
     todos: overrides.todos ?? createTodoRepository(getDatabase()),
+    // @gen:factories
     // @setup-if storage=s3,local
     storage: overrides.storage ?? createStorage(),
     // @setup-endif

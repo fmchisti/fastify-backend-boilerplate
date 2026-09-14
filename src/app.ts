@@ -101,6 +101,7 @@ export const buildApp = async (
   await app.register(healthRoutes, { prefix: "/api", database: deps.database });
   await app.register(meRoutes, { prefix: "/api" });
   await app.register(todoRoutes, { prefix: "/api", repository: deps.todos });
+  // @gen:routes
   // @setup-if storage=s3,local
   await app.register(fileRoutes, { prefix: "/api", storage: deps.storage });
   // @setup-endif

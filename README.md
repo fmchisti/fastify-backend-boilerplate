@@ -76,7 +76,7 @@ pnpm dev
 - API docs: http://localhost:3000/api/docs
 - Liveness: `GET /api/health` · Readiness (checks DB): `GET /api/health/ready`
 - Current user: `GET /api/me`
-- Example CRUD: `/api/todos`
+- Example CRUD: `/api/todos`. Create your own with `pnpm gen:module product --fields "name:string price:float"`
 <!-- @setup-if storage=s3,local -->
 - File uploads: `/api/files`
 <!-- @setup-endif -->
@@ -95,6 +95,7 @@ pnpm dev
 | `pnpm db:migrate` | Apply migrations (development) |
 | `pnpm db:migrate:deploy` | Apply migrations in production (after `pnpm build`) |
 | `pnpm db:studio` | Browse the database |
+| `pnpm gen:module <name> --fields "..."` | Scaffold a CRUD module with table, migration, and tests |
 <!-- @setup-template-only -->
 | `pnpm setup:project` | Choose providers (deletes the rest) |
 | `pnpm setup:verify` | Boilerplate maintainers: test every setup combination |

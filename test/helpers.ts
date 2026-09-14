@@ -12,6 +12,7 @@ export const createTestDependencies = (overrides: Partial<AppDependencies> = {})
   database: createFakeDatabase(),
   auth: createFakeAuthProvider(),
   todos: createMemoryTodoRepository(),
+  // @gen:fakes
   // @setup-if storage=s3,local
   storage: createMemoryStorage(),
   // @setup-endif
