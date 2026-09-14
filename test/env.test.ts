@@ -27,4 +27,28 @@ describe("parseEnv", () => {
       parseEnv({ ...validEnv, DATABASE_URL: "nope", PORT: "abc" }),
     ).toThrow(/DATABASE_URL[\s\S]*PORT|PORT[\s\S]*DATABASE_URL/);
   });
+
+  it.each([
+    [undefined, false],
+    ["false", false],
+    ["true", true],
+    ["2", 2],
+    ["10.0.0.0/8, 127.0.0.1", ["10.0.0.0/8", "127.0.0.1"]],
+  ])("parses TRUST_PROXY=%s", (value, expected) => {
+    expect(parseEnv({ ...validEnv, ...(value !== undefined && { TRUST_PROXY: value }) }).TRUST_PROXY).toEqual(expected);
+  });
+
+  it("parses CORS_ORIGINS as a list of URLs", () => {
+    expect(parseEnv({ ...validEnv, CORS_ORIGINS: "https://a.com, https://b.com" }).CORS_ORIGINS).toEqual([
+      "https://a.com",
+      "https://b.com",
+    ]);
+    expect(() => parseEnv({ ...validEnv, CORS_ORIGINS: "not-a-url" })).toThrow(/CORS_ORIGINS/);
+  });
+
+  it("disables docs by default only in production", () => {
+    expect(parseEnv({ ...validEnv, NODE_ENV: "development" }).DOCS_ENABLED).toBe(true);
+    expect(parseEnv({ ...validEnv, NODE_ENV: "production" }).DOCS_ENABLED).toBe(false);
+    expect(parseEnv({ ...validEnv, NODE_ENV: "production", DOCS_ENABLED: "true" }).DOCS_ENABLED).toBe(true);
+  });
 });

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll } from "vitest";
 import { type App, buildApp } from "../src/app.ts";
+import { type Env, parseEnv } from "../src/config/env.ts";
 import type { AppDependencies } from "../src/container.ts";
 import { createFakeAuthProvider } from "./fakes/auth.ts";
 import { createFakeDatabase } from "./fakes/database.ts";
@@ -19,8 +20,14 @@ export const createTestDependencies = (overrides: Partial<AppDependencies> = {})
   ...overrides,
 });
 
-export const buildTestApp = async (overrides: Partial<AppDependencies> = {}): Promise<App> => {
-  const app = await buildApp(createTestDependencies(overrides));
+/** Core env for tests, with optional overrides (e.g. `{ RATE_LIMIT_MAX: "2" }`). */
+export const testEnv = (overrides: Record<string, string> = {}): Env => parseEnv({ ...process.env, ...overrides });
+
+export const buildTestApp = async (
+  overrides: Partial<AppDependencies> = {},
+  env: Env = testEnv(),
+): Promise<App> => {
+  const app = await buildApp(createTestDependencies(overrides), { env });
   await app.ready();
   return app;
 };

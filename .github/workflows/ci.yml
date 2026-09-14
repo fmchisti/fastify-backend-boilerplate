@@ -1,0 +1,138 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Type-check, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm type-check
+      - run: pnpm test
+      - run: pnpm build
+
+  # @setup-template-only
+  setup-matrix:
+    name: Every setup combination
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm setup:verify --concurrency 2
+  # @setup-endif
+
+  docker:
+    name: Docker image smoke test
+    runs-on: ubuntu-latest
+    # @setup-template-only
+    strategy:
+      fail-fast: false
+      matrix:
+        orm: [drizzle, prisma]
+    # @setup-endif
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: app
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d app"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app
+    steps:
+      - uses: actions/checkout@v7
+      # @setup-template-only
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Configure a project from the template
+        run: |
+          git config user.email ci@example.com && git config user.name CI
+          pnpm setup:project --auth better-auth --orm ${{ matrix.orm }} --storage local --deploy none --yes --force
+      # @setup-endif
+      - name: Build image
+        run: docker build -t api .
+      - name: Write runtime env
+        run: |
+          {
+            echo "DATABASE_URL=$DATABASE_URL"
+            echo "LOG_LEVEL=info"
+            # Placeholder provider config: enough to boot, no external calls at startup
+            # @setup-if auth=better-auth
+            echo "BETTER_AUTH_URL=http://localhost:3000"
+            echo "BETTER_AUTH_SECRET=$(openssl rand -base64 32)"
+            # @setup-endif
+            # @setup-if auth=supabase
+            echo "SUPABASE_URL=https://example.supabase.co"
+            echo "SUPABASE_ANON_KEY=ci-placeholder"
+            # @setup-endif
+            # @setup-if auth=firebase
+            echo "FIREBASE_PROJECT_ID=ci-placeholder"
+            # @setup-endif
+            # @setup-if auth=logto
+            echo "LOGTO_ENDPOINT=https://example.logto.app"
+            echo "LOGTO_API_RESOURCE=https://api.example.com"
+            # @setup-endif
+            # @setup-if storage=s3
+            echo "S3_BUCKET=ci-placeholder"
+            echo "S3_REGION=us-east-1"
+            # @setup-endif
+          } > ci.env
+      - name: Run migrations in the image
+        run: docker run --rm --network host --env-file ci.env api pnpm db:migrate:deploy
+      - name: Start container and check readiness
+        run: |
+          docker run -d --name api --network host --env-file ci.env api
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:3000/api/health/ready; then break; fi
+            sleep 1
+          done
+          curl -fsS http://localhost:3000/api/health/ready
+      # @setup-if auth=better-auth
+      - name: Exercise the API
+        run: |
+          curl -fsS -D headers.txt -o /dev/null -H 'content-type: application/json' \
+            -d '{"email":"ci@example.com","password":"correct-horse-battery","name":"CI"}' \
+            http://localhost:3000/api/auth/sign-up/email
+          TOKEN=$(grep -i '^set-auth-token:' headers.txt | awk '{print $2}' | tr -d '\r')
+          curl -fsS -H "authorization: Bearer $TOKEN" http://localhost:3000/api/me
+          curl -fsS -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+            -d '{"title":"from CI"}' http://localhost:3000/api/todos
+          curl -fsS -H "authorization: Bearer $TOKEN" http://localhost:3000/api/todos | grep -q "from CI"
+      # @setup-endif
+      - name: Graceful shutdown exits 0
+        run: |
+          docker stop --timeout 20 api
+          test "$(docker inspect api --format '{{.State.ExitCode}}')" = "0"
+      - name: Container logs
+        if: always()
+        run: docker logs api || true

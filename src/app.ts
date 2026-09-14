@@ -1,4 +1,6 @@
 import fastifyCors from "@fastify/cors";
+import fastifyHelmet from "@fastify/helmet";
+import fastifyRateLimit from "@fastify/rate-limit";
 import fastifySwagger from "@fastify/swagger";
 import fastifySwaggerUi from "@fastify/swagger-ui";
 import Fastify from "fastify";
@@ -8,11 +10,13 @@ import {
   type ZodTypeProvider,
 } from "fastify-type-provider-zod";
 import { z } from "zod";
-import { env } from "./config/env.ts";
+import { APP_NAME, APP_VERSION } from "./config/app-info.ts";
+import { type Env, env as processEnv } from "./config/env.ts";
 import { loggerOptions } from "./config/logger.ts";
-import { swaggerOptions, swaggerUiOptions } from "./config/swagger.ts";
+import { createSwaggerOptions, createSwaggerUiOptions } from "./config/swagger.ts";
 import { type AppDependencies, createDependencies } from "./container.ts";
-import { errorHandler, notFoundHandler } from "./lib/errors.ts";
+import { errorHandler, HttpError, notFoundHandler } from "./lib/errors.ts";
+import { generateRequestId, REQUEST_ID_HEADER } from "./lib/request-id.ts";
 // @setup-if storage=s3,local
 import fileRoutes from "./modules/files/routes.ts";
 // @setup-endif
@@ -22,20 +26,31 @@ import todoRoutes from "./modules/todos/routes.ts";
 
 const DEV_ORIGINS = ["http://localhost:3000", "http://localhost:5173"];
 
-const corsOrigins = (): string[] => {
-  const origins = env.FRONTEND_URL ? [env.FRONTEND_URL] : [];
+export const corsOrigins = (env: Env): string[] =>
   // Localhost origins are only allowed outside production
-  return env.NODE_ENV === "production" ? origins : [...origins, ...DEV_ORIGINS];
-};
+  env.NODE_ENV === "production" ? env.CORS_ORIGINS : [...new Set([...env.CORS_ORIGINS, ...DEV_ORIGINS])];
+
+export interface BuildAppOptions {
+  /** Override config (tests). Defaults to validated process.env. */
+  env?: Env;
+}
 
 /**
  * Build a fully configured Fastify instance without listening.
  * Used by `src/index.ts` to start the server and by tests via `app.inject()`.
  * Pass `overrides` to replace real providers (database, auth, storage) with fakes.
  */
-export const buildApp = async (overrides: Partial<AppDependencies> = {}) => {
-  const app = Fastify({ logger: loggerOptions }).withTypeProvider<ZodTypeProvider>();
-  const deps = createDependencies(overrides);
+export const buildApp = async (
+  overrides: Partial<AppDependencies> = {},
+  { env = processEnv }: BuildAppOptions = {},
+) => {
+  const app = Fastify({
+    logger: loggerOptions,
+    trustProxy: env.TRUST_PROXY,
+    genReqId: generateRequestId,
+    requestIdLogLabel: "requestId",
+  }).withTypeProvider<ZodTypeProvider>();
+  const deps = createDependencies(overrides, { corsOrigins: corsOrigins(env) });
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
@@ -44,18 +59,47 @@ export const buildApp = async (overrides: Partial<AppDependencies> = {}) => {
   app.decorate("auth", deps.auth);
   app.decorateRequest("user", null);
 
+  app.addHook("onRequest", async (request, reply) => {
+    reply.header(REQUEST_ID_HEADER, request.id);
+  });
+
+  // During shutdown, tell clients to drop keep-alive sockets once in-flight responses finish.
+  // Otherwise close() waits for those sockets to time out.
+  let closing = false;
+  app.addHook("preClose", async () => {
+    closing = true;
+  });
+  app.addHook("onSend", async (_request, reply) => {
+    if (closing) reply.header("connection", "close");
+  });
   app.addHook("onClose", async () => {
     await deps.auth.close?.();
     await deps.database.close();
   });
 
+  await app.register(fastifyHelmet, {
+    // The JSON API needs no CSP; Swagger UI sets its own on its routes
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: "same-site" },
+  });
   await app.register(fastifyCors, {
-    origin: corsOrigins(),
+    origin: corsOrigins(env),
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     credentials: true,
+    exposedHeaders: [REQUEST_ID_HEADER, "retry-after"],
   });
-  await app.register(fastifySwagger, swaggerOptions);
-  await app.register(fastifySwaggerUi, swaggerUiOptions);
+  // In-memory store: limits are per instance. Use a Redis store when running several instances.
+  await app.register(fastifyRateLimit, {
+    max: env.RATE_LIMIT_MAX,
+    timeWindow: env.RATE_LIMIT_WINDOW,
+    errorResponseBuilder: (_request, context) =>
+      new HttpError(429, `Too many requests, retry in ${context.after}`),
+  });
+
+  await app.register(fastifySwagger, createSwaggerOptions(env));
+  if (env.DOCS_ENABLED) {
+    await app.register(fastifySwaggerUi, createSwaggerUiOptions(env));
+  }
 
   if (deps.auth.routes) {
     await app.register(deps.auth.routes, { prefix: "/api/auth" });
@@ -70,19 +114,20 @@ export const buildApp = async (overrides: Partial<AppDependencies> = {}) => {
   app.get(
     "/",
     {
+      config: { rateLimit: false },
       schema: {
         tags: ["Health"],
         description: "API root endpoint",
         summary: "API information",
         response: {
           200: z.object({
-            message: z.string(),
+            name: z.string(),
             version: z.string(),
           }),
         },
       },
     },
-    async () => ({ message: "Fastify API", version: "1.0.0" }),
+    async () => ({ name: APP_NAME, version: APP_VERSION }),
   );
 
   return app;

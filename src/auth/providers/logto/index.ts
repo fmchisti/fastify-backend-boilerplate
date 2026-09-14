@@ -6,9 +6,8 @@ import {
 } from "jose";
 import { z } from "zod";
 import { loadEnv } from "../../../config/env.ts";
-import type { AppDatabase } from "../../../db/index.ts";
 import { getBearerToken } from "../../bearer.ts";
-import type { AuthProvider } from "../../types.ts";
+import type { AuthProvider, AuthProviderContext } from "../../types.ts";
 
 const logtoEnvSchema = z.object({
   // e.g. https://your-tenant.logto.app (no trailing slash)
@@ -64,9 +63,7 @@ export const createLogtoAuthProvider = (options: LogtoAuthOptions): AuthProvider
   };
 };
 
-export const createAuthProvider = (_context: {
-  database: () => AppDatabase;
-}): AuthProvider => {
+export const createAuthProvider = (_context: AuthProviderContext): AuthProvider => {
   const env = loadEnv(logtoEnvSchema, process.env, "Logto auth env");
   return createLogtoAuthProvider({
     endpoint: env.LOGTO_ENDPOINT,

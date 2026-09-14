@@ -49,6 +49,6 @@ describe("GET /", () => {
     const response = await app().inject({ method: "GET", url: "/" });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ message: "Fastify API", version: "1.0.0" });
+    expect(response.json()).toEqual({ name: "fastify-backend-boilerplate", version: "1.0.0" });
   });
 });

@@ -1,9 +1,8 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { loadEnv } from "../../../config/env.ts";
-import type { AppDatabase } from "../../../db/index.ts";
 import { getBearerToken } from "../../bearer.ts";
-import type { AuthProvider } from "../../types.ts";
+import type { AuthProvider, AuthProviderContext } from "../../types.ts";
 
 const supabaseEnvSchema = z.object({
   SUPABASE_URL: z.url(),
@@ -53,6 +52,4 @@ export const createSupabaseAuthProvider = (
   };
 };
 
-export const createAuthProvider = (_context: {
-  database: () => AppDatabase;
-}): AuthProvider => createSupabaseAuthProvider();
+export const createAuthProvider = (_context: AuthProviderContext): AuthProvider => createSupabaseAuthProvider();

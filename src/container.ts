@@ -20,13 +20,20 @@ export interface AppDependencies {
   // @setup-endif
 }
 
-export const createDependencies = (overrides: Partial<AppDependencies> = {}): AppDependencies => {
+export interface DependencyConfig {
+  corsOrigins: string[];
+}
+
+export const createDependencies = (
+  overrides: Partial<AppDependencies>,
+  config: DependencyConfig,
+): AppDependencies => {
   // Created only if something below needs it, so tests with fakes never open a pool
   let database: AppDatabase | undefined;
   const getDatabase = (): AppDatabase => (database ??= createDatabase());
 
   return {
-    auth: overrides.auth ?? createAuthProvider({ database: getDatabase }),
+    auth: overrides.auth ?? createAuthProvider({ database: getDatabase, trustedOrigins: config.corsOrigins }),
     todos: overrides.todos ?? createTodoRepository(getDatabase()),
     // @setup-if storage=s3,local
     storage: overrides.storage ?? createStorage(),

@@ -91,7 +91,8 @@ pnpm dev
 | `pnpm test` | Unit, integration, and type tests |
 | `pnpm db:up` / `pnpm db:down` | Local Postgres in Docker |
 | `pnpm db:generate` | Generate a migration (Drizzle) or client (Prisma) |
-| `pnpm db:migrate` | Apply migrations |
+| `pnpm db:migrate` | Apply migrations (development) |
+| `pnpm db:migrate:deploy` | Apply migrations in production (after `pnpm build`) |
 | `pnpm db:studio` | Browse the database |
 <!-- @setup-template-only -->
 | `pnpm setup:project` | Choose providers (deletes the rest) |
@@ -113,6 +114,35 @@ src/
   config/           env, logger, swagger
 test/               Vitest; fakes/ for providers, repositories/ contract tests on in-process Postgres
 ```
+
+## Production
+
+Built in:
+- **Graceful shutdown**: on SIGTERM, stops accepting connections, finishes in-flight requests (up to `SHUTDOWN_TIMEOUT_SECONDS`), closes the database, exits 0.
+- **Health checks**: `/api/health` (liveness) and `/api/health/ready` (database reachable), never rate limited.
+- **Security headers** (`@fastify/helmet`), **CORS** from `CORS_ORIGINS`, **rate limiting** per client IP (`RATE_LIMIT_MAX` per `RATE_LIMIT_WINDOW`).
+- **`TRUST_PROXY=true`** behind Railway, Render, Fly, or a load balancer, so client IPs (rate limits, auth logs) are real. Leave `false` when exposed directly.
+- **Request IDs**: `x-request-id` is accepted from your proxy or generated, returned on every response, and logged as `requestId`. Authorization and cookie headers are redacted from logs.
+- **API docs** are off in production unless `DOCS_ENABLED=true` (protect them with `DOCS_USERNAME`/`DOCS_PASSWORD`).
+- **Migrations without dev tools**: `pnpm db:migrate:deploy`.
+
+Rate limits are stored in memory, so each instance counts separately. With several instances, pass a Redis store to `@fastify/rate-limit` in `src/app.ts`.
+
+### Docker
+
+```bash
+docker build -t api .
+docker run --rm --env-file .env api pnpm db:migrate:deploy
+docker run --env-file .env -p 3000:3000 api
+```
+
+Multi-stage image on `node:22-alpine`, production dependencies only, runs as the `node` user, with a `HEALTHCHECK`. CI builds the image, runs migrations against Postgres, calls the API, and checks that `docker stop` exits cleanly.
+<!-- @setup-if deploy=railway -->
+
+### Railway
+
+`railway.json` builds with Railpack, runs `pnpm db:migrate:deploy` before each deploy, health-checks `/api/health/ready`, and drains for 10 seconds. Set `TRUST_PROXY=true`, `CORS_ORIGINS`, and `DATABASE_URL=${{Postgres.DATABASE_URL}}`.
+<!-- @setup-endif -->
 
 ## Database hosting
 

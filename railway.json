@@ -5,10 +5,13 @@
     "buildCommand": "pnpm build"
   },
   "deploy": {
-    "startCommand": "pnpm start",
-    "preDeployCommand": ["pnpm db:migrate"],
+    "startCommand": "node dist/index.js",
+    "preDeployCommand": [
+      "pnpm db:migrate:deploy"
+    ],
     "healthcheckPath": "/api/health/ready",
     "healthcheckTimeout": 60,
-    "restartPolicyType": "ON_FAILURE"
+    "restartPolicyType": "ON_FAILURE",
+    "drainingSeconds": 10
   }
 }

@@ -2,9 +2,8 @@ import { cert, getApps, initializeApp, type App } from "firebase-admin/app";
 import { type Auth, getAuth } from "firebase-admin/auth";
 import { z } from "zod";
 import { loadEnv } from "../../../config/env.ts";
-import type { AppDatabase } from "../../../db/index.ts";
 import { getBearerToken } from "../../bearer.ts";
-import type { AuthProvider } from "../../types.ts";
+import type { AuthProvider, AuthProviderContext } from "../../types.ts";
 
 const firebaseEnvSchema = z.object({
   FIREBASE_PROJECT_ID: z.string().min(1),
@@ -80,6 +79,4 @@ export const createFirebaseAuthProvider = (
   };
 };
 
-export const createAuthProvider = (_context: {
-  database: () => AppDatabase;
-}): AuthProvider => createFirebaseAuthProvider();
+export const createAuthProvider = (_context: AuthProviderContext): AuthProvider => createFirebaseAuthProvider();

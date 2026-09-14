@@ -1,7 +1,12 @@
 import { memoryAdapter } from "better-auth/adapters/memory";
+import Fastify from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { App } from "../../src/app.ts";
-import { createBetterAuthProvider } from "../../src/auth/providers/better-auth/index.ts";
+import {
+  CLIENT_IP_HEADER,
+  createBetterAuthProvider,
+  toWebRequest,
+} from "../../src/auth/providers/better-auth/index.ts";
 import { bearer } from "../fakes/auth.ts";
 import { buildTestApp } from "../helpers.ts";
 
@@ -62,5 +67,28 @@ describe("Better Auth provider", () => {
 
     const me = await app.inject({ method: "GET", url: "/api/me", headers: bearer("forged") });
     expect(me.statusCode).toBe(401);
+  });
+});
+
+describe("toWebRequest", () => {
+  it("forwards the Fastify-resolved client IP and ignores a spoofed header", async () => {
+    const app = Fastify({ trustProxy: true });
+    let forwarded: Request | undefined;
+    app.post("/api/auth/sign-in/email", async (request) => {
+      forwarded = toWebRequest(request);
+      return {};
+    });
+
+    await app.inject({
+      method: "POST",
+      url: "/api/auth/sign-in/email",
+      headers: { "x-forwarded-for": "203.0.113.7", [CLIENT_IP_HEADER]: "1.2.3.4" },
+      payload: { email: "a@example.com" },
+    });
+
+    expect(forwarded?.headers.get(CLIENT_IP_HEADER)).toBe("203.0.113.7");
+    expect(await forwarded?.json()).toEqual({ email: "a@example.com" });
+    expect(forwarded?.url).toBe("http://localhost/api/auth/sign-in/email");
+    await app.close();
   });
 });
