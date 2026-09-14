@@ -42,6 +42,36 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm setup:verify --concurrency 2
+
+  create-fastra:
+    name: pnpm create fastra (packed package)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build and pack like npm publish
+        run: |
+          pnpm build:create
+          cd packages/create-fastra && npm pack --pack-destination "$RUNNER_TEMP"
+      - name: Create a project from this commit
+        run: |
+          git config --global user.email ci@example.com && git config --global user.name CI
+          cd "$RUNNER_TEMP"
+          pnpm dlx "file:$RUNNER_TEMP/create-fastra-$(node -p "require('$GITHUB_WORKSPACE/packages/create-fastra/package.json').version").tgz" \
+            shop-api --template "$GITHUB_WORKSPACE" \
+            --auth better-auth --orm drizzle --storage local --redis none --deploy none --yes
+      - name: Check the generated project
+        working-directory: ${{ runner.temp }}/shop-api
+        run: |
+          test "$(node -p "require('./package.json').name")" = "shop-api"
+          test ! -e setup && test ! -e packages
+          test -z "$(git status --porcelain)"
+          pnpm check && pnpm type-check && pnpm test
   # @setup-endif
 
   docker:

@@ -30,7 +30,9 @@
     "scripts/**/*",
     "vitest.config.mts",
     "drizzle.config.ts",
-    "prisma.config.ts"
+    "prisma.config.ts",
+    "packages/*/src/**/*",
+    "packages/*/test/**/*"
   ],
   "exclude": ["node_modules", "dist"]
 }

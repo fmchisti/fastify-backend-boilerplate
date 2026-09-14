@@ -54,6 +54,30 @@ Each combination is applied to a temporary copy (sharing `node_modules`). Then i
 
 CI runs the matrix (`setup-matrix` job) and a Docker smoke test for a Drizzle and a Prisma + Redis project (`docker` job) on every pull request.
 
+## `create-fastra` package
+
+`packages/create-fastra/` is the `pnpm create fastra` CLI. It downloads the template with giget (skipping `packages/`, `node_modules`, `.env`, …), runs `pnpm install` and `pnpm setup:project` (forwarding every option it does not own), then creates a git repository with an initial commit. Setup removes `packages/` from generated projects.
+
+- Code: `src/cli.ts` (argument parsing, target checks, template fetching) and `src/index.ts` (the interactive flow). Tests: `packages/create-fastra/test/`, run by the root `pnpm test`.
+- `--template` accepts a giget source (`gh:fmchisti/fastra#v1.0.0`) or a local folder, which CI uses to test the current commit.
+- CI job `create-fastra` builds and packs the package like `npm publish`, creates a project from the checkout with `pnpm dlx`, and checks it (name, no setup files, clean git tree, check/type-check/test).
+
+### Publishing
+
+The first publish is manual and needs an npm account with 2FA:
+
+```bash
+pnpm install
+pnpm build:create
+cd packages/create-fastra
+npm login
+npm publish --access public
+```
+
+Then anyone can run `pnpm create fastra my-api` (or `npm create fastra@latest my-api`).
+
+For a new release, bump `version` in `packages/create-fastra/package.json`, then build and publish again. The CLI downloads the template from `main` at run time, so template changes do not need a new package version; only changes to the CLI do.
+
 ## Checklist for template changes
 
 - [ ] `pnpm check && pnpm type-check && pnpm test`
