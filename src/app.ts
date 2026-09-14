@@ -69,6 +69,9 @@ export const buildApp = async (
   app.addHook("onClose", async () => {
     await deps.auth.close?.();
     await deps.database.close();
+    // @setup-if redis=redis
+    await deps.redis.quit();
+    // @setup-endif
   });
 
   await app.register(fastifyHelmet, {
@@ -82,12 +85,20 @@ export const buildApp = async (
     credentials: true,
     exposedHeaders: [REQUEST_ID_HEADER, "retry-after"],
   });
-  // In-memory store: limits are per instance. Use a Redis store when running several instances.
   await app.register(fastifyRateLimit, {
     max: env.RATE_LIMIT_MAX,
     timeWindow: env.RATE_LIMIT_WINDOW,
     errorResponseBuilder: (_request, context) =>
       new HttpError(429, `Too many requests, retry in ${context.after}`),
+    // @setup-if redis=none
+    // In-memory store: limits are per instance. Choose Redis in setup to share them across instances.
+    // @setup-endif
+    // @setup-if redis=redis
+    // Shared across instances. If Redis is unavailable, requests are allowed rather than failing.
+    redis: deps.redis,
+    nameSpace: "rate-limit:",
+    skipOnError: true,
+    // @setup-endif
   });
 
   await app.register(fastifySwagger, createSwaggerOptions(env));
@@ -98,7 +109,17 @@ export const buildApp = async (
   if (deps.auth.routes) {
     await app.register(deps.auth.routes, { prefix: "/api/auth" });
   }
-  await app.register(healthRoutes, { prefix: "/api", database: deps.database });
+  await app.register(healthRoutes, {
+    prefix: "/api",
+    checks: {
+      database: () => deps.database.ping(),
+      // @setup-if redis=redis
+      redis: async () => {
+        await deps.redis.ping();
+      },
+      // @setup-endif
+    },
+  });
   await app.register(meRoutes, { prefix: "/api" });
   await app.register(todoRoutes, { prefix: "/api", repository: deps.todos });
   // @gen:routes

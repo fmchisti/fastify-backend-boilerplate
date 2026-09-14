@@ -10,7 +10,7 @@ import { features, type Selection } from "./features.ts";
 const exec = promisify(execFile);
 
 /**
- * Applies every auth × ORM × storage combination to a temporary copy of the repo,
+ * Applies every auth × ORM × storage × Redis combination to a temporary copy of the repo,
  * then type-checks and runs the tests. Proves setup never leaves broken code.
  *
  *   pnpm setup:verify                   all combinations
@@ -28,13 +28,16 @@ const { values } = parseArgs({
 const root = path.resolve(import.meta.dirname, "..");
 const COPY_EXCLUDE = new Set(["node_modules", ".git", "dist", "generated", "uploads", "coverage", ".env"]);
 
-const nameOf = (selection: Selection) => `${selection.auth}+${selection.orm}+${selection.storage}`;
+const nameOf = (selection: Selection) =>
+  `${selection.auth}+${selection.orm}+${selection.storage}+${selection.redis}`;
 
+// deploy only adds config files, so it does not multiply the matrix
 const combinations = Object.keys(features.auth.options).flatMap((auth) =>
   Object.keys(features.orm.options).flatMap((orm) =>
-    Object.keys(features.storage.options).map(
-      // deploy only adds config files, so it does not multiply the matrix
-      (storage) => ({ auth, orm, storage, deploy: "railway" }) as Selection,
+    Object.keys(features.storage.options).flatMap((storage) =>
+      Object.keys(features.redis.options).map(
+        (redis) => ({ auth, orm, storage, redis, deploy: "railway" }) as Selection,
+      ),
     ),
   ),
 );

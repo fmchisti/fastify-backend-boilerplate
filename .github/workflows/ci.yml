@@ -51,7 +51,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        orm: [drizzle, prisma]
+        include:
+          - { orm: drizzle, redis: none }
+          - { orm: prisma, redis: redis }
     # @setup-endif
     services:
       postgres:
@@ -64,6 +66,14 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U postgres -d app"
           --health-interval 5s --health-timeout 5s --health-retries 10
+      # @setup-if redis=redis
+      redis:
+        image: redis:8-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+      # @setup-endif
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/app
     steps:
@@ -78,7 +88,7 @@ jobs:
       - name: Configure a project from the template
         run: |
           git config user.email ci@example.com && git config user.name CI
-          pnpm setup:project --auth better-auth --orm ${{ matrix.orm }} --storage local --deploy none --yes --force
+          pnpm setup:project --auth better-auth --orm ${{ matrix.orm }} --storage local --redis ${{ matrix.redis }} --deploy none --yes --force
       # @setup-endif
       - name: Build image
         run: docker build -t api .
@@ -102,6 +112,9 @@ jobs:
             # @setup-if auth=logto
             echo "LOGTO_ENDPOINT=https://example.logto.app"
             echo "LOGTO_API_RESOURCE=https://api.example.com"
+            # @setup-endif
+            # @setup-if redis=redis
+            echo "REDIS_URL=redis://localhost:6379"
             # @setup-endif
             # @setup-if storage=s3
             echo "S3_BUCKET=ci-placeholder"

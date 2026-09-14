@@ -1,6 +1,6 @@
 # Providers
 
-Auth, ORM, and storage each sit behind one interface. Routes and services never import a vendor SDK.
+Auth, ORM, storage, and Redis each sit behind one interface. Routes and services never import a vendor SDK.
 
 ## Auth
 
@@ -74,18 +74,18 @@ Contract: `src/db/types.ts` (`Database` with `client`, `ping`, `close`) plus one
 ### Drizzle
 
 - Schema: `src/db/drizzle/schema/*.ts` (exported from `index.ts`)
-- `pnpm db:generate` creates a SQL migration in `drizzle/`; `pnpm db:migrate` applies it.
+- `pnpm db:generate` creates a SQL migration in `drizzle/`; `pnpm db:migrate` applies it (`pnpm db:migrate:deploy` in production).
 <!-- @setup-endif -->
 
 <!-- @setup-if orm=prisma -->
 ### Prisma
 
 - Schema: `prisma/schema/*.prisma`. Client generated into `src/generated/prisma` (gitignored, created on `pnpm install`).
-- `pnpm db:migrate:dev` creates and applies a migration in development; `pnpm db:migrate` applies migrations in production.
+- `pnpm db:migrate` creates and applies a migration in development; `pnpm db:migrate:deploy` applies pending migrations in production.
 - Uses the `@prisma/adapter-pg` driver adapter (node-postgres).
 <!-- @setup-endif -->
 
-Repositories are tested by one contract suite (`test/repositories/todo-repository.contract.ts`) against every implementation, on an in-process Postgres (PGlite). Add the same pattern for new modules.
+Repositories are tested by contract suites against every implementation on an in-process Postgres (PGlite): `todo-repository.contract.ts` for todos, and the shared `crud-contract.ts` that `pnpm gen:module` uses.
 
 ## Storage
 
@@ -109,7 +109,7 @@ The files module (`/api/files`) generates keys as `<userId>/<uuid>.<ext>`, allow
 
 - Env: `S3_BUCKET`, `S3_REGION`, optional `S3_ENDPOINT` + `S3_FORCE_PATH_STYLE` (R2, MinIO, Railway Buckets), optional `S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY` (otherwise the AWS default credential chain).
 - `POST /api/files/upload-url` returns a presigned PUT URL (content type is signed). Configure bucket CORS for browser uploads.
-- Local development: `docker compose up -d minio`, see comments in `docker-compose.yml`.
+- Local development: `docker compose --profile minio up -d`, see comments in `docker-compose.yml`.
 <!-- @setup-endif -->
 
 <!-- @setup-if storage=local -->
@@ -118,6 +118,16 @@ The files module (`/api/files`) generates keys as `<userId>/<uuid>.<ext>`, allow
 - Env: `LOCAL_STORAGE_DIR` (default `./uploads`)
 - For development or a single server with a persistent disk. Containers and Railway have ephemeral filesystems unless you attach a volume.
 - No presigned uploads (`/api/files/upload-url` returns 501).
+<!-- @setup-endif -->
+
+<!-- @setup-if redis=redis -->
+## Redis
+
+`src/redis/index.ts` creates one shared `ioredis` client from `REDIS_URL` (`rediss://` for TLS). It is in `AppDependencies` as `redis`, closed on shutdown, and checked by `/api/health/ready`.
+
+- Rate limiting uses it as the store (`src/app.ts`), so limits are shared across instances. Commands fail fast when disconnected (`enableOfflineQueue: false`) and the limiter fails open.
+- Reuse it for caching, locks, or queues. For Better Auth, pass it as `secondaryStorage` to keep sessions out of Postgres.
+- Tests use `createRedisMock()` (`test/fakes/redis.ts`); each instance has its own keyspace.
 <!-- @setup-endif -->
 
 <!-- @setup-if storage=none -->

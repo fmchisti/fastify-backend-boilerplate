@@ -13,7 +13,7 @@ vars for everything you do not select.
 
 Usage:
   pnpm setup:project                           interactive
-  pnpm setup:project --auth logto --orm prisma --storage s3 --deploy railway --yes
+  pnpm setup:project --auth logto --orm prisma --storage s3 --redis redis --deploy railway --yes
 
 Options:
 ${FEATURE_IDS.map((id) => `  --${id.padEnd(10)} ${Object.keys(features[id].options).join(" | ")}  (default: ${features[id].default})`).join("\n")}
@@ -47,6 +47,7 @@ const main = async () => {
       auth: { type: "string" },
       orm: { type: "string" },
       storage: { type: "string" },
+      redis: { type: "string" },
       deploy: { type: "string" },
       yes: { type: "boolean", default: false },
       dir: { type: "string", default: process.cwd() },
@@ -61,6 +62,7 @@ const main = async () => {
     auth: values.auth,
     orm: values.orm,
     storage: values.storage,
+    redis: values.redis,
     deploy: values.deploy,
   };
 

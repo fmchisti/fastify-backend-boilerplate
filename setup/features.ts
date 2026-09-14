@@ -222,6 +222,32 @@ export const features = {
     },
   },
 
+  redis: {
+    label: "Redis",
+    default: "none",
+    options: {
+      none: {
+        label: "None",
+        hint: "rate limits in memory (per instance)",
+      },
+      redis: {
+        label: "Redis",
+        hint: "shared rate limits across instances, readiness check; reuse for caching",
+        paths: ["src/redis", "test/redis.test.ts", "test/fakes/redis.ts"],
+        dependencies: ["ioredis"],
+        devDependencies: ["ioredis-mock", "@types/ioredis-mock"],
+        env: [
+          {
+            key: "REDIS_URL",
+            example: "redis://localhost:6379",
+            comment: "Docker: pnpm db:up. Railway: add a Redis service and use its REDIS_URL",
+          },
+        ],
+        nextSteps: ["Redis: set REDIS_URL (docker compose starts one locally with pnpm db:up)"],
+      },
+    },
+  },
+
   deploy: {
     label: "Deploy target",
     default: "none",

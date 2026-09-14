@@ -17,5 +17,5 @@ export const HealthCheckSchema = {
 
 export const ReadinessResponseSchema = z.object({
   status: z.literal("ready"),
-  database: z.literal("up"),
+  checks: z.record(z.string(), z.literal("up")),
 });

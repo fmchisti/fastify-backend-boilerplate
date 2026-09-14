@@ -17,6 +17,7 @@ Pick your auth provider, ORM, file storage and deploy target once, and the setup
 | Auth | Better Auth (self-hosted) · Supabase · Firebase · Logto |
 | ORM | Drizzle · Prisma |
 | File storage | S3-compatible (AWS S3, R2, MinIO, Railway Buckets) · local disk · none |
+| Redis | shared rate limits + readiness check · none |
 | Deploy | Railway · none |
 <!-- @setup-endif -->
 <!-- @setup-if auth=better-auth -->
@@ -43,6 +44,9 @@ Pick your auth provider, ORM, file storage and deploy target once, and the setup
 <!-- @setup-if storage=local -->
 - **Storage**: local disk
 <!-- @setup-endif -->
+<!-- @setup-if redis=redis -->
+- **Redis**: shared rate limits (`src/redis`)
+<!-- @setup-endif -->
 <!-- @setup-if deploy=railway -->
 - **Deploy**: Railway (`railway.json`)
 <!-- @setup-endif -->
@@ -57,10 +61,10 @@ pnpm install
 pnpm setup:project
 ```
 
-`setup:project` asks four questions, then removes unselected providers (code, tests, dependencies, env vars), regenerates the initial migration, and type-checks. Non-interactive:
+`setup:project` asks five questions, then removes unselected providers (code, tests, dependencies, env vars), regenerates the initial migration, and type-checks. Non-interactive:
 
 ```bash
-pnpm setup:project --auth logto --orm prisma --storage s3 --deploy railway --yes
+pnpm setup:project --auth logto --orm prisma --storage s3 --redis redis --deploy railway --yes
 ```
 
 <!-- @setup-endif -->
@@ -121,14 +125,19 @@ test/               Vitest; fakes/ for providers, repositories/ contract tests o
 
 Built in:
 - **Graceful shutdown**: on SIGTERM, stops accepting connections, finishes in-flight requests (up to `SHUTDOWN_TIMEOUT_SECONDS`), closes the database, exits 0.
-- **Health checks**: `/api/health` (liveness) and `/api/health/ready` (database reachable), never rate limited.
+- **Health checks**: `/api/health` (liveness) and `/api/health/ready` (database, and Redis when used), never rate limited.
 - **Security headers** (`@fastify/helmet`), **CORS** from `CORS_ORIGINS`, **rate limiting** per client IP (`RATE_LIMIT_MAX` per `RATE_LIMIT_WINDOW`).
 - **`TRUST_PROXY=true`** behind Railway, Render, Fly, or a load balancer, so client IPs (rate limits, auth logs) are real. Leave `false` when exposed directly.
 - **Request IDs**: `x-request-id` is accepted from your proxy or generated, returned on every response, and logged as `requestId`. Authorization and cookie headers are redacted from logs.
 - **API docs** are off in production unless `DOCS_ENABLED=true` (protect them with `DOCS_USERNAME`/`DOCS_PASSWORD`).
 - **Migrations without dev tools**: `pnpm db:migrate:deploy`.
 
-Rate limits are stored in memory, so each instance counts separately. With several instances, pass a Redis store to `@fastify/rate-limit` in `src/app.ts`.
+<!-- @setup-if redis=none -->
+Rate limits are stored in memory, so each instance counts separately. With several instances, choose Redis in setup (or pass a Redis client to `@fastify/rate-limit` in `src/app.ts`).
+<!-- @setup-endif -->
+<!-- @setup-if redis=redis -->
+Rate limits are stored in Redis, so they are shared across instances. If Redis is down, requests are allowed (fail open) and `/api/health/ready` reports it.
+<!-- @setup-endif -->
 
 ### Docker
 

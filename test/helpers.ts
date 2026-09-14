@@ -4,6 +4,7 @@ import { type Env, parseEnv } from "../src/config/env.ts";
 import type { AppDependencies } from "../src/container.ts";
 import { createFakeAuthProvider } from "./fakes/auth.ts";
 import { createFakeDatabase } from "./fakes/database.ts";
+import { createRedisMock } from "./fakes/redis.ts"; // @setup-if redis=redis
 import { createMemoryStorage } from "./fakes/storage.ts"; // @setup-if storage=s3,local
 import { createMemoryTodoRepository } from "./fakes/todo-repository.ts";
 
@@ -15,6 +16,9 @@ export const createTestDependencies = (overrides: Partial<AppDependencies> = {})
   // @gen:fakes
   // @setup-if storage=s3,local
   storage: createMemoryStorage(),
+  // @setup-endif
+  // @setup-if redis=redis
+  redis: createRedisMock(),
   // @setup-endif
   ...overrides,
 });
