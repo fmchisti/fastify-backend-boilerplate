@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { HealthCheckResponseSchema } from "../src/modules/health/schema";
-import { useTestApp } from "./helpers";
+import { HealthCheckResponseSchema } from "../src/modules/health/schema.ts";
+import { createFakeDatabase } from "./fakes/database.ts";
+import { useTestApp } from "./helpers.ts";
 
 describe("GET /api/health", () => {
   const app = useTestApp();
@@ -12,6 +13,32 @@ describe("GET /api/health", () => {
     const body = HealthCheckResponseSchema.parse(response.json());
     expect(body.status).toBe("healthy");
     expect(body.environment).toBe("test");
+  });
+});
+
+describe("GET /api/health/ready", () => {
+  const database = createFakeDatabase();
+  const app = useTestApp(() => ({ database }));
+
+  it("returns 200 when the database responds", async () => {
+    database.healthy = true;
+
+    const response = await app().inject({ method: "GET", url: "/api/health/ready" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ status: "ready", database: "up" });
+  });
+
+  it("returns 503 when the database is unreachable", async () => {
+    database.healthy = false;
+
+    const response = await app().inject({ method: "GET", url: "/api/health/ready" });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({
+      error: "Service Unavailable",
+      message: "Database unreachable",
+    });
   });
 });
 

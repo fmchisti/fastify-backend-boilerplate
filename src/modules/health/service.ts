@@ -1,5 +1,5 @@
-import { env } from "../../config/env";
-import { HealthCheckResponse } from "./schema";
+import { env } from "../../config/env.ts";
+import type { HealthCheckResponse } from "./schema.ts";
 
 const startTime = Date.now();
 

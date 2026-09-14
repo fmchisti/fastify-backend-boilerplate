@@ -1,4 +1,3 @@
-/// <reference types="node" />
 import "dotenv/config";
 import { defineConfig } from "drizzle-kit";
 
@@ -10,7 +9,7 @@ if (!databaseUrl) {
 
 export default defineConfig({
   out: "./drizzle",
-  schema: "./src/db/schema.ts",
+  schema: "./src/db/drizzle/schema/index.ts",
   dialect: "postgresql",
   migrations: {
     table: "__drizzle_migrations",

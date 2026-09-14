@@ -8,12 +8,17 @@ import {
   type ZodTypeProvider,
 } from "fastify-type-provider-zod";
 import { z } from "zod";
-import { env } from "./config/env";
-import { loggerOptions } from "./config/logger";
-import { swaggerOptions, swaggerUiOptions } from "./config/swagger";
-import { errorHandler, notFoundHandler } from "./lib/errors";
-import authRoutes from "./modules/auth/routes";
-import healthRoutes from "./modules/health/routes";
+import { env } from "./config/env.ts";
+import { loggerOptions } from "./config/logger.ts";
+import { swaggerOptions, swaggerUiOptions } from "./config/swagger.ts";
+import { type AppDependencies, createDependencies } from "./container.ts";
+import { errorHandler, notFoundHandler } from "./lib/errors.ts";
+// @setup-if storage=s3,local
+import fileRoutes from "./modules/files/routes.ts";
+// @setup-endif
+import healthRoutes from "./modules/health/routes.ts";
+import meRoutes from "./modules/me/routes.ts";
+import todoRoutes from "./modules/todos/routes.ts";
 
 const DEV_ORIGINS = ["http://localhost:3000", "http://localhost:5173"];
 
@@ -26,15 +31,23 @@ const corsOrigins = (): string[] => {
 /**
  * Build a fully configured Fastify instance without listening.
  * Used by `src/index.ts` to start the server and by tests via `app.inject()`.
+ * Pass `overrides` to replace real providers (database, auth, storage) with fakes.
  */
-export const buildApp = async () => {
+export const buildApp = async (overrides: Partial<AppDependencies> = {}) => {
   const app = Fastify({ logger: loggerOptions }).withTypeProvider<ZodTypeProvider>();
+  const deps = createDependencies(overrides);
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
   app.setErrorHandler(errorHandler);
   app.setNotFoundHandler(notFoundHandler);
+  app.decorate("auth", deps.auth);
   app.decorateRequest("user", null);
+
+  app.addHook("onClose", async () => {
+    await deps.auth.close?.();
+    await deps.database.close();
+  });
 
   await app.register(fastifyCors, {
     origin: corsOrigins(),
@@ -44,8 +57,15 @@ export const buildApp = async () => {
   await app.register(fastifySwagger, swaggerOptions);
   await app.register(fastifySwaggerUi, swaggerUiOptions);
 
-  await app.register(healthRoutes, { prefix: "/api" });
-  await app.register(authRoutes, { prefix: "/api" });
+  if (deps.auth.routes) {
+    await app.register(deps.auth.routes, { prefix: "/api/auth" });
+  }
+  await app.register(healthRoutes, { prefix: "/api", database: deps.database });
+  await app.register(meRoutes, { prefix: "/api" });
+  await app.register(todoRoutes, { prefix: "/api", repository: deps.todos });
+  // @setup-if storage=s3,local
+  await app.register(fileRoutes, { prefix: "/api", storage: deps.storage });
+  // @setup-endif
 
   app.get(
     "/",

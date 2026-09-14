@@ -6,8 +6,8 @@ import {
 } from "fastify-type-provider-zod";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
-import { ErrorResponseSchema, errorHandler, HttpError, notFoundHandler } from "../src/lib/errors";
-import { useTestApp } from "./helpers";
+import { ErrorResponseSchema, errorHandler, HttpError, notFoundHandler } from "../src/lib/errors.ts";
+import { useTestApp } from "./helpers.ts";
 
 const buildErrorApp = async (): Promise<FastifyInstance> => {
   const app = Fastify().withTypeProvider<ZodTypeProvider>();

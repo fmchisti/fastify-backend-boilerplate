@@ -1,6 +1,6 @@
-import type { ZodRouteHandler } from "../../types/fastify";
-import type { HealthCheckSchema } from "./schema";
-import { getHealthStatus } from "./service";
+import type { ZodRouteHandler } from "../../types/fastify.ts";
+import type { HealthCheckSchema } from "./schema.ts";
+import { getHealthStatus } from "./service.ts";
 
 export const healthCheckHandler: ZodRouteHandler<
   typeof HealthCheckSchema

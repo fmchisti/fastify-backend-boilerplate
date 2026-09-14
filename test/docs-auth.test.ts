@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { isValidBasicAuth } from "../src/lib/basic-auth";
-import { basicAuthHeader, useTestApp } from "./helpers";
+import { isValidBasicAuth } from "../src/lib/basic-auth.ts";
+import { basicAuthHeader, useTestApp } from "./helpers.ts";
 
 describe("isValidBasicAuth", () => {
   it("accepts correct credentials", () => {
@@ -47,7 +47,7 @@ describe("/api/docs protection", () => {
     expect(response.statusCode).toBe(200);
     const spec = response.json<{ paths: Record<string, unknown> }>();
     expect(Object.keys(spec.paths)).toEqual(
-      expect.arrayContaining(["/api/health", "/api/auth/me"]),
+      expect.arrayContaining(["/api/health", "/api/me", "/api/todos", "/api/files"]),
     );
   });
 });

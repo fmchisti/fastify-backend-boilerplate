@@ -14,3 +14,8 @@ export const HealthCheckSchema = {
     200: HealthCheckResponseSchema,
   },
 };
+
+export const ReadinessResponseSchema = z.object({
+  status: z.literal("ready"),
+  database: z.literal("up"),
+});

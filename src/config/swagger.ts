@@ -1,9 +1,9 @@
 import type { FastifyDynamicSwaggerOptions } from "@fastify/swagger";
 import type { FastifySwaggerUiOptions } from "@fastify/swagger-ui";
 import { jsonSchemaTransform } from "fastify-type-provider-zod";
-import { isValidBasicAuth } from "../lib/basic-auth";
-import { HttpError } from "../lib/errors";
-import { env } from "./env";
+import { isValidBasicAuth } from "../lib/basic-auth.ts";
+import { HttpError } from "../lib/errors.ts";
+import { env } from "./env.ts";
 
 export const swaggerOptions: FastifyDynamicSwaggerOptions = {
   transform: jsonSchemaTransform,
@@ -23,14 +23,15 @@ export const swaggerOptions: FastifyDynamicSwaggerOptions = {
         url: `http://localhost:${env.PORT}`,
         description: "Local development server",
       },
-      {
-        url: env.BACKEND_URL,
-        description: "Production server",
-      },
+      ...(env.BACKEND_URL ? [{ url: env.BACKEND_URL, description: "Deployed server" }] : []),
     ],
     tags: [
       { name: "Health", description: "Health check endpoints" },
-      { name: "Auth", description: "Authenticated user endpoints" },
+      { name: "Auth", description: "Current user" },
+      { name: "Todos", description: "Example CRUD module" },
+      // @setup-if storage=s3,local
+      { name: "Files", description: "File uploads" },
+      // @setup-endif
     ],
     components: {
       securitySchemes: {

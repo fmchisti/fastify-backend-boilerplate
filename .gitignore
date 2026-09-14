@@ -46,3 +46,9 @@ coverage/
 *.pid
 *.seed
 .cache/
+
+# Prisma generated client
+src/generated/
+
+# Local file storage
+uploads/
