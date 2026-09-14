@@ -11,6 +11,7 @@ Create a new API from Fastra (https://github.com/fmchisti/fastra).
 
 Usage:
   pnpm create fastra <directory> [options]
+  pnpm dlx fastra <directory> [options]
 
 Examples:
   pnpm create fastra shop-api

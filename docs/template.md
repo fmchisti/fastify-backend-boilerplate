@@ -56,7 +56,7 @@ CI runs the matrix (`setup-matrix` job) and a Docker smoke test for a Drizzle an
 
 ## `create-fastra` package
 
-`packages/create-fastra/` is the `pnpm create fastra` CLI. It downloads the template with giget (skipping `packages/`, `node_modules`, `.env`, …), runs `pnpm install` and `pnpm setup:project` (forwarding every option it does not own), then creates a git repository with an initial commit. Setup removes `packages/` from generated projects.
+`packages/create-fastra/` is the `pnpm create fastra` CLI. `packages/fastra/` is a one-file wrapper that depends on it, so `pnpm dlx fastra my-api` runs the same code. It downloads the template with giget (skipping `packages/`, `node_modules`, `.env`, …), runs `pnpm install` and `pnpm setup:project` (forwarding every option it does not own), then creates a git repository with an initial commit. Setup removes `packages/` from generated projects.
 
 - Code: `src/cli.ts` (argument parsing, target checks, template fetching) and `src/index.ts` (the interactive flow). Tests: `packages/create-fastra/test/`, run by the root `pnpm test`.
 - `--template` accepts a giget source (`gh:fmchisti/fastra#v1.0.0`) or a local folder, which CI uses to test the current commit.
@@ -64,19 +64,19 @@ CI runs the matrix (`setup-matrix` job) and a Docker smoke test for a Drizzle an
 
 ### Publishing
 
-The first publish is manual and needs an npm account with 2FA:
+Publishing needs an npm account with 2FA (npm asks for the authenticator code). Publish `create-fastra` first, because `fastra` depends on it:
 
 ```bash
 pnpm install
 pnpm build:create
-cd packages/create-fastra
 npm login
-npm publish --access public
+(cd packages/create-fastra && npm publish --access public)
+(cd packages/fastra && npm publish --access public)
 ```
 
-Then anyone can run `pnpm create fastra my-api` (or `npm create fastra@latest my-api`).
+Then anyone can run `pnpm create fastra my-api`, `npm create fastra@latest my-api`, or `pnpm dlx fastra my-api`.
 
-For a new release, bump `version` in `packages/create-fastra/package.json`, then build and publish again. The CLI downloads the template from `main` at run time, so template changes do not need a new package version; only changes to the CLI do.
+For a new CLI release, bump `version` in `packages/create-fastra/package.json`, build, and publish it. Republish `fastra` only when its own files change or when `create-fastra` moves to a version outside its `^0.1.x` range (bump the dependency first). The CLI downloads the template from `main` at run time, so template changes need no new package version.
 
 ## Checklist for template changes
 

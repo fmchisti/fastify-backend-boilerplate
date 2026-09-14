@@ -24,7 +24,7 @@ const main = async () => {
     return;
   }
 
-  p.intro("create-fastra");
+  p.intro("Fastra");
 
   let directory = options.directory;
   if (directory === undefined) {

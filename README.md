@@ -63,6 +63,8 @@ pnpm create fastra my-api
 pnpm create fastra my-api --auth logto --orm prisma --storage s3 --redis redis --deploy railway --yes
 ```
 
+`pnpm dlx fastra my-api` does the same.
+
 **With pnpm, step by step** (no GitHub step):
 
 ```bash

@@ -1,17 +1,16 @@
 {
-  "name": "create-fastra",
-  "version": "0.1.1",
-  "description": "Create a type-safe Fastify API from Fastra: pick auth, ORM, storage, and Redis, get a clean project.",
+  "name": "fastra",
+  "version": "0.1.0",
+  "description": "Create a type-safe Fastify API with Fastra: pick auth, ORM, storage, and Redis, get a clean project. Same as `pnpm create fastra`.",
   "type": "module",
   "bin": {
-    "create-fastra": "dist/index.js"
+    "fastra": "bin.js"
   },
   "files": [
-    "dist"
+    "bin.js"
   ],
   "dependencies": {
-    "@clack/prompts": "^1.8.1",
-    "giget": "^3.3.1"
+    "create-fastra": "^0.1.1"
   },
   "engines": {
     "node": ">=22.12"
@@ -28,14 +27,11 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/fmchisti/fastra.git",
-    "directory": "packages/create-fastra"
+    "directory": "packages/fastra"
   },
   "homepage": "https://github.com/fmchisti/fastra#readme",
   "bugs": {
     "url": "https://github.com/fmchisti/fastra/issues"
   },
-  "license": "ISC",
-  "exports": {
-    ".": "./dist/index.js"
-  }
+  "license": "ISC"
 }
