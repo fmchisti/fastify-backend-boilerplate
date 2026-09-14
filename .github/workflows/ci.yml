@@ -57,8 +57,7 @@ jobs:
       - name: Build and pack like npm publish
         run: |
           pnpm build:create
-          (cd packages/create-fastra && npm pack --pack-destination "$RUNNER_TEMP")
-          (cd packages/fastra && npm pack --pack-destination "$RUNNER_TEMP")
+          cd packages/create-fastra && npm pack --pack-destination "$RUNNER_TEMP"
       - name: Create a project from this commit
         run: |
           git config --global user.email ci@example.com && git config --global user.name CI
@@ -73,16 +72,6 @@ jobs:
           test ! -e setup && test ! -e packages
           test -z "$(git status --porcelain)"
           pnpm check && pnpm type-check && pnpm test
-      - name: The fastra wrapper runs the same CLI
-        run: |
-          mkdir -p "$RUNNER_TEMP/tools" "$RUNNER_TEMP/wrapper" && cd "$RUNNER_TEMP/tools"
-          npm init -y > /dev/null
-          # Installing both tarballs together resolves fastra's create-fastra dependency locally
-          npm install --no-audit --no-fund "$RUNNER_TEMP"/create-fastra-*.tgz "$RUNNER_TEMP"/fastra-*.tgz
-          cd "$RUNNER_TEMP/wrapper"
-          "$RUNNER_TEMP/tools/node_modules/.bin/fastra" demo-api --template "$GITHUB_WORKSPACE" \
-            --auth supabase --orm drizzle --storage none --redis none --deploy none --yes
-          cd demo-api && test ! -e setup && pnpm type-check && pnpm test
   # @setup-endif
 
   docker:

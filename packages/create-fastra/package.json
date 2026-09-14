@@ -1,6 +1,6 @@
 {
   "name": "create-fastra",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Create a type-safe Fastify API from Fastra: pick auth, ORM, storage, and Redis, get a clean project.",
   "type": "module",
   "bin": {
@@ -34,8 +34,5 @@
   "bugs": {
     "url": "https://github.com/fmchisti/fastra/issues"
   },
-  "license": "ISC",
-  "exports": {
-    ".": "./dist/index.js"
-  }
+  "license": "ISC"
 }
