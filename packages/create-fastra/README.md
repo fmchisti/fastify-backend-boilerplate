@@ -4,6 +4,8 @@ Create a type-safe Fastify + TypeScript API from [Fastra](https://github.com/fmc
 
 ```bash
 pnpm create fastra shop-api
+# or
+pnpm dlx fastra shop-api
 ```
 
 It downloads the template, installs dependencies, runs Fastra's setup (you choose auth, ORM, storage, Redis, and deploy target; everything else is deleted), and creates a git repository with an initial commit.
