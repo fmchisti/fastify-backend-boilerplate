@@ -1,7 +1,7 @@
 {
   "name": "fastify-backend-boilerplate",
   "version": "1.0.0",
-  "description": "Fastify + TypeScript backend boilerplate with Drizzle, Zod, Swagger, and Supabase",
+  "description": "Type-safe Fastify + TypeScript API boilerplate with selectable auth (Better Auth, Supabase, Firebase, Logto), ORM (Drizzle, Prisma), and storage (S3, local)",
   "main": "dist/index.js",
   "scripts": {
     "deploy": "railway up",
@@ -14,7 +14,12 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "setup:verify": "tsx setup/verify.ts",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "postinstall": "prisma generate",
+    "setup:project": "tsx setup/cli.ts"
   },
   "keywords": [
     "fastify",

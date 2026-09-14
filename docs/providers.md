@@ -1,0 +1,125 @@
+# Providers
+
+Auth, ORM, and storage each sit behind one interface. Routes and services never import a vendor SDK.
+
+## Auth
+
+Contract: `src/auth/types.ts`
+
+```ts
+interface AuthProvider {
+  name: string;
+  getUser(request: FastifyRequest): Promise<AuthUser | null>; // null = not authenticated
+  routes?: FastifyPluginAsync; // mounted at /api/auth
+  close?(): Promise<void>;
+}
+interface AuthUser { id: string; email: string | null; name: string | null }
+```
+
+`getUser` returns `null` for missing, invalid, or expired credentials and throws only when the provider is unreachable (→ 500).
+
+<!-- @setup-if auth=better-auth -->
+### Better Auth
+
+Self-hosted. Users, sessions, accounts, and verification tokens live in your Postgres (tables in the ORM schema).
+
+- Env: `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET` (`openssl rand -base64 32`)
+- Endpoints under `/api/auth`, e.g. `POST /api/auth/sign-up/email`, `POST /api/auth/sign-in/email`, `POST /api/auth/sign-out`. Full list: Better Auth docs.
+- Browsers use the session cookie. API/mobile clients use `Authorization: Bearer <token>` with the token from the `set-auth-token` response header (bearer plugin).
+- Social login, email verification, 2FA, organizations: add to `buildAuth()` in `src/auth/providers/better-auth/index.ts`. Plugins that add tables need the schema updated (`npx @better-auth/cli generate`) in both the ORM schema and a new migration.
+<!-- @setup-endif -->
+
+<!-- @setup-if auth=supabase -->
+### Supabase Auth
+
+Verifies Supabase access tokens sent as `Authorization: Bearer <access_token>`.
+
+- Env: `SUPABASE_URL`, `SUPABASE_ANON_KEY`
+- Uses `auth.getClaims()`: verified locally against the project JWKS when asymmetric signing keys are enabled (recommended: Dashboard → Project Settings → JWT Keys), otherwise falls back to a request to Supabase Auth.
+- `user_metadata` is editable by the user. It is only used for the display name.
+<!-- @setup-endif -->
+
+<!-- @setup-if auth=firebase -->
+### Firebase Auth
+
+Verifies Firebase ID tokens (`Authorization: Bearer <idToken>` from `user.getIdToken()`).
+
+- Env: `FIREBASE_PROJECT_ID`. `FIREBASE_CLIENT_EMAIL` + `FIREBASE_PRIVATE_KEY` only if you call other Admin APIs.
+- Token errors (`auth/*`) → 401. Other errors → 500.
+<!-- @setup-endif -->
+
+<!-- @setup-if auth=logto -->
+### Logto
+
+Verifies Logto access tokens issued for an API resource, using the tenant JWKS (`jose`).
+
+- Env: `LOGTO_ENDPOINT` (e.g. `https://tenant.logto.app`), `LOGTO_API_RESOURCE` (API resource indicator)
+- Clients must request tokens with the API resource as the `resource`/audience.
+- Access tokens only include `sub` by default. Add `email`/`name` as custom claims in Logto if you need them.
+- Same adapter works for other OIDC providers issuing JWT access tokens (Auth0, Keycloak, Clerk, Cognito): change the issuer and JWKS URL.
+<!-- @setup-endif -->
+
+### Adding an auth provider
+
+1. Create `src/auth/providers/<id>/index.ts` exporting `createAuthProvider(context)` that returns an `AuthProvider`. Validate env inside with `loadEnv(schema)`. Accept injected clients in an options object so tests need no network.
+2. Add tests in `test/providers/<id>.test.ts`: build the app with `buildTestApp({ auth })` and call `/api/me`.
+3. Register the option in `setup/features.ts` (paths, dependencies, env).
+4. Run `pnpm setup:verify --only <id>`.
+
+## ORM
+
+Contract: `src/db/types.ts` (`Database` with `client`, `ping`, `close`) plus one repository interface per module.
+
+<!-- @setup-if orm=drizzle -->
+### Drizzle
+
+- Schema: `src/db/drizzle/schema/*.ts` (exported from `index.ts`)
+- `pnpm db:generate` creates a SQL migration in `drizzle/`; `pnpm db:migrate` applies it.
+<!-- @setup-endif -->
+
+<!-- @setup-if orm=prisma -->
+### Prisma
+
+- Schema: `prisma/schema/*.prisma`. Client generated into `src/generated/prisma` (gitignored, created on `pnpm install`).
+- `pnpm db:migrate:dev` creates and applies a migration in development; `pnpm db:migrate` applies migrations in production.
+- Uses the `@prisma/adapter-pg` driver adapter (node-postgres).
+<!-- @setup-endif -->
+
+Repositories are tested by one contract suite (`test/repositories/todo-repository.contract.ts`) against every implementation, on an in-process Postgres (PGlite). Add the same pattern for new modules.
+
+## Storage
+
+<!-- @setup-if storage=s3,local -->
+Contract: `src/storage/types.ts`
+
+```ts
+interface StorageProvider {
+  put({ key, body, contentType }): Promise<void>;
+  get(key): Promise<{ body: Readable; contentType; contentLength } | null>;
+  delete(key): Promise<void>;
+  createUploadUrl?({ key, contentType, expiresInSeconds }): Promise<PresignedUpload>; // optional
+}
+```
+
+The files module (`/api/files`) generates keys as `<userId>/<uuid>.<ext>`, allows only the owner to read or delete, restricts content types (`UPLOAD_ALLOWED_CONTENT_TYPES`), limits size (`UPLOAD_MAX_FILE_SIZE_MB`), and serves non-image files as downloads with `nosniff`.
+<!-- @setup-endif -->
+
+<!-- @setup-if storage=s3 -->
+### S3-compatible
+
+- Env: `S3_BUCKET`, `S3_REGION`, optional `S3_ENDPOINT` + `S3_FORCE_PATH_STYLE` (R2, MinIO, Railway Buckets), optional `S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY` (otherwise the AWS default credential chain).
+- `POST /api/files/upload-url` returns a presigned PUT URL (content type is signed). Configure bucket CORS for browser uploads.
+- Local development: `docker compose up -d minio`, see comments in `docker-compose.yml`.
+<!-- @setup-endif -->
+
+<!-- @setup-if storage=local -->
+### Local disk
+
+- Env: `LOCAL_STORAGE_DIR` (default `./uploads`)
+- For development or a single server with a persistent disk. Containers and Railway have ephemeral filesystems unless you attach a volume.
+- No presigned uploads (`/api/files/upload-url` returns 501).
+<!-- @setup-endif -->
+
+<!-- @setup-if storage=none -->
+File storage was not selected. To add it later, copy `src/storage` and `src/modules/files` from the boilerplate.
+<!-- @setup-endif -->

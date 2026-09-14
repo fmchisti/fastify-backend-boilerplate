@@ -9,7 +9,7 @@ export type AppDatabase = Database<DrizzleClient>;
 
 export const createDatabase = (
   connectionString: string = env.DATABASE_URL,
-  poolOptions: pg.PoolConfig = {},
+  poolOptions: pg.PoolConfig = { max: env.DATABASE_POOL_MAX },
 ): AppDatabase => {
   const pool = new pg.Pool({ connectionString, ...poolOptions });
   const client = drizzle(pool, { schema });

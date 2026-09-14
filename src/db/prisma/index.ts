@@ -8,7 +8,7 @@ export type AppDatabase = Database<PrismaClient>;
 
 export const createDatabase = (
   connectionString: string = env.DATABASE_URL,
-  poolOptions: pg.PoolConfig = {},
+  poolOptions: pg.PoolConfig = { max: env.DATABASE_POOL_MAX },
 ): AppDatabase => {
   const client = new PrismaClient({
     adapter: new PrismaPg({ connectionString, ...poolOptions }),

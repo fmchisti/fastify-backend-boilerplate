@@ -46,8 +46,14 @@ describe("/api/docs protection", () => {
 
     expect(response.statusCode).toBe(200);
     const spec = response.json<{ paths: Record<string, unknown> }>();
-    expect(Object.keys(spec.paths)).toEqual(
-      expect.arrayContaining(["/api/health", "/api/me", "/api/todos", "/api/files"]),
-    );
+    const expectedPaths = [
+      "/api/health",
+      "/api/me",
+      "/api/todos",
+      // @setup-if storage=s3,local
+      "/api/files",
+      // @setup-endif
+    ];
+    expect(Object.keys(spec.paths)).toEqual(expect.arrayContaining(expectedPaths));
   });
 });

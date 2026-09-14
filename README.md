@@ -1,54 +1,129 @@
 # Fastify Backend Boilerplate
 
-A minimal Fastify + TypeScript backend with **Drizzle ORM**, **Zod**, **Swagger**, and **Supabase** auth. Use this as a starting point for new APIs.
+Type-safe Fastify + TypeScript API.
+<!-- @setup-template-only -->
+Pick your auth provider, ORM, file storage and deploy target once, and the setup CLI deletes everything you did not choose.
+<!-- @setup-endif -->
 
 ## Stack
 
-- **Fastify** – HTTP server  
-- **TypeScript** – type safety  
-- **Drizzle ORM** – PostgreSQL schema and queries  
-- **Zod** – validation and OpenAPI schema generation  
-- **Supabase** – JWT auth (optional)  
-- **Pino** – logging  
+- **Fastify 5** + **TypeScript** (strict, ESM) + **Zod 4** for validation, types, and OpenAPI
+- **PostgreSQL**: local Docker, Railway, Supabase, Neon, RDS… anything with a connection string
+- **Swagger UI** at `/api/docs`, **Pino** logging, **Vitest** tests (no database or credentials needed)
 
-## Quick start
+<!-- @setup-template-only -->
+| Choice | Options |
+|---|---|
+| Auth | Better Auth (self-hosted) · Supabase · Firebase · Logto |
+| ORM | Drizzle · Prisma |
+| File storage | S3-compatible (AWS S3, R2, MinIO, Railway Buckets) · local disk · none |
+| Deploy | Railway · none |
+<!-- @setup-endif -->
+<!-- @setup-if auth=better-auth -->
+- **Auth**: Better Auth (users and sessions in this database)
+<!-- @setup-endif -->
+<!-- @setup-if auth=supabase -->
+- **Auth**: Supabase Auth
+<!-- @setup-endif -->
+<!-- @setup-if auth=firebase -->
+- **Auth**: Firebase Auth
+<!-- @setup-endif -->
+<!-- @setup-if auth=logto -->
+- **Auth**: Logto
+<!-- @setup-endif -->
+<!-- @setup-if orm=drizzle -->
+- **ORM**: Drizzle
+<!-- @setup-endif -->
+<!-- @setup-if orm=prisma -->
+- **ORM**: Prisma
+<!-- @setup-endif -->
+<!-- @setup-if storage=s3 -->
+- **Storage**: S3-compatible
+<!-- @setup-endif -->
+<!-- @setup-if storage=local -->
+- **Storage**: local disk
+<!-- @setup-endif -->
+<!-- @setup-if deploy=railway -->
+- **Deploy**: Railway (`railway.json`)
+<!-- @setup-endif -->
+
+<!-- @setup-template-only -->
+## Start a new project
 
 ```bash
+git clone <this-repo> my-api && cd my-api
+rm -rf .git && git init && git add -A && git commit -m "Initial commit"
 pnpm install
-cp .env.example .env   # create and fill your env
+pnpm setup:project
+```
+
+`setup:project` asks four questions, then removes unselected providers (code, tests, dependencies, env vars), regenerates the initial migration, and type-checks. Non-interactive:
+
+```bash
+pnpm setup:project --auth logto --orm prisma --storage s3 --deploy railway --yes
+```
+
+<!-- @setup-endif -->
+## Getting started
+
+```bash
+cp .env.example .env
+pnpm db:up
+pnpm db:migrate
 pnpm dev
 ```
 
-- **Root:** `GET /` – API info  
-- **Health:** `GET /api/health` – health check  
-- **Me:** `GET /api/auth/me` – current user (Bearer token)  
-- **Docs:** `GET /api/docs` – Swagger UI (optional Basic auth via `DOCS_USERNAME` / `DOCS_PASSWORD`)  
+- API docs: http://localhost:3000/api/docs
+- Liveness: `GET /api/health` · Readiness (checks DB): `GET /api/health/ready`
+- Current user: `GET /api/me`
+- Example CRUD: `/api/todos`
+<!-- @setup-if storage=s3,local -->
+- File uploads: `/api/files`
+<!-- @setup-endif -->
 
 ## Scripts
 
-| Command        | Description                |
-|----------------|----------------------------|
-| `pnpm dev`     | Run with hot reload        |
-| `pnpm build`   | Compile to `dist/`         |
-| `pnpm start`   | Run production build       |
-| `pnpm type-check` | TypeScript check        |
-| `pnpm test`    | Run tests (Vitest)         |
-| `pnpm test:watch` | Tests in watch mode     |
-| `pnpm db:generate` | Generate Drizzle migrations |
-| `pnpm db:push` | Push schema to DB          |
-| `pnpm db:studio` | Drizzle Studio UI        |
+| Command | Description |
+|---|---|
+| `pnpm dev` | Run with hot reload |
+| `pnpm build` / `pnpm start` | Compile to `dist/` / run it |
+| `pnpm type-check` | TypeScript check (src + tests) |
+| `pnpm test` | Unit, integration, and type tests |
+| `pnpm db:up` / `pnpm db:down` | Local Postgres in Docker |
+| `pnpm db:generate` | Generate a migration (Drizzle) or client (Prisma) |
+| `pnpm db:migrate` | Apply migrations |
+| `pnpm db:studio` | Browse the database |
+<!-- @setup-template-only -->
+| `pnpm setup:project` | Choose providers (deletes the rest) |
+| `pnpm setup:verify` | Boilerplate maintainers: test every setup combination |
+<!-- @setup-endif -->
 
 ## Project structure
 
-- `src/config/` – env, database, logger, Supabase, Swagger  
-- `src/db/` – Drizzle schema (edit `schema.ts`, then `db:generate` / `db:push`)  
-- `src/app.ts` – `buildApp()` (plugins, error handlers, routes); `src/index.ts` starts it  
-- `src/lib/` – `HttpError`, error handlers, basic-auth helper  
-- `src/middleware/` – `authenticate`, `optionalAuth`, `requireAuth`, `getAuthUser`  
-- `src/modules/` – feature modules (e.g. `health`); add new ones here (routes, handler, service, schema, docs)
-- `src/types/` – shared types (`ZodRouteHandler`)
-- `test/` – Vitest tests; no real DB or Supabase needed
+```
+src/
+  app.ts            buildApp(): plugins, error handling, routes (no listen)
+  index.ts          starts the server
+  container.ts      dependencies (database, auth, repositories, storage); tests swap in fakes
+  auth/             AuthProvider interface, middleware, providers/<name>
+  db/               Database interface and the selected ORM client + schema
+  storage/          StorageProvider interface and providers/<name>
+  modules/<name>/   feature modules: routes, handler, service, schema, docs, repository
+  lib/              errors, pagination, basic auth
+  config/           env, logger, swagger
+test/               Vitest; fakes/ for providers, repositories/ contract tests on in-process Postgres
+```
 
-See **[BACKEND_SETUP_GUIDE.md](./BACKEND_SETUP_GUIDE.md)** for full setup, env vars, and deployment.
+## Database hosting
 
-**AI & maintainers:** See [AGENT.md](./AGENT.md) (workflow), [RULE.md](./RULE.md) (conventions), [AUTH.md](./AUTH.md) (auth).
+`DATABASE_URL` is the only thing that changes:
+
+- **Local Docker**: `pnpm db:up` → `postgresql://postgres:postgres@localhost:5432/app`
+- **Railway**: add a Postgres service, set `DATABASE_URL=${{Postgres.DATABASE_URL}}`
+- **Supabase**: Project Settings → Database → connection string (session pooler for long-running servers)
+- **Neon / RDS / other**: paste the connection string (add `?sslmode=require` if needed)
+
+## Learn more
+
+- [AGENTS.md](./AGENTS.md): conventions and how to add modules (for humans and AI agents)
+- [docs/providers.md](./docs/providers.md): auth, ORM, and storage details, and how to add a new provider

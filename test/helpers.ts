@@ -3,7 +3,9 @@ import { type App, buildApp } from "../src/app.ts";
 import type { AppDependencies } from "../src/container.ts";
 import { createFakeAuthProvider } from "./fakes/auth.ts";
 import { createFakeDatabase } from "./fakes/database.ts";
+// @setup-if storage=s3,local
 import { createMemoryStorage } from "./fakes/storage.ts";
+// @setup-endif
 import { createMemoryTodoRepository } from "./fakes/todo-repository.ts";
 
 /** Fake implementations of every dependency. No database, network, or provider credentials needed. */
@@ -11,7 +13,9 @@ export const createTestDependencies = (overrides: Partial<AppDependencies> = {})
   database: createFakeDatabase(),
   auth: createFakeAuthProvider(),
   todos: createMemoryTodoRepository(),
+  // @setup-if storage=s3,local
   storage: createMemoryStorage(),
+  // @setup-endif
   ...overrides,
 });
 
