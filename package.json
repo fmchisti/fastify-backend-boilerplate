@@ -49,6 +49,7 @@
     "@clack/prompts": "^1.8.1",
     "@electric-sql/pglite": "^0.5.8",
     "@electric-sql/pglite-socket": "^0.2.11",
+    "@smithy/util-stream": "^4.8.2",
     "@types/node": "^22.20.2",
     "@types/pg": "^8.16.0",
     "aws-sdk-client-mock": "^4.1.0",

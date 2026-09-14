@@ -71,7 +71,8 @@ export const createS3Storage = ({ client, bucket }: S3StorageOptions): StoragePr
     const url = await getSignedUrl(
       client,
       new PutObjectCommand({ Bucket: bucket, Key: key, ContentType: contentType }),
-      { expiresIn: expiresInSeconds },
+      // Sign content-type so the client cannot upload a different type than was approved
+      { expiresIn: expiresInSeconds, signableHeaders: new Set(["content-type"]) },
     );
     return {
       url,
