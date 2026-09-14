@@ -17,13 +17,27 @@ services:
       timeout: 5s
       retries: 10
 
+  # @setup-if redis=redis
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  # @setup-endif
+
   # @setup-if storage=s3
   # S3-compatible storage for local development:
   #   S3_ENDPOINT=http://localhost:9000 S3_FORCE_PATH_STYLE=true
   #   S3_ACCESS_KEY_ID=minioadmin S3_SECRET_ACCESS_KEY=minioadmin S3_BUCKET=app
-  # Console: http://localhost:9001 (create the bucket there). Start with: docker compose up -d minio
+  # Console: http://localhost:9001 (create the bucket there). Start with: docker compose --profile minio up -d
   minio:
     image: minio/minio:latest
+    profiles: [minio]
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: minioadmin

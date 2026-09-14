@@ -3,14 +3,14 @@ import { cp, mkdtemp, rm, symlink } from "node:fs/promises";
 import { availableParallelism, tmpdir } from "node:os";
 import path from "node:path";
 import { parseArgs, promisify } from "node:util";
-import { regenerateDatabaseArtifacts } from "./database.ts";
+import { formatProject, regenerateDatabaseArtifacts } from "./database.ts";
 import { applySelection } from "./engine.ts";
 import { features, type Selection } from "./features.ts";
 
 const exec = promisify(execFile);
 
 /**
- * Applies every auth × ORM × storage combination to a temporary copy of the repo,
+ * Applies every auth × ORM × storage × Redis combination to a temporary copy of the repo,
  * then type-checks and runs the tests. Proves setup never leaves broken code.
  *
  *   pnpm setup:verify                   all combinations
@@ -28,13 +28,16 @@ const { values } = parseArgs({
 const root = path.resolve(import.meta.dirname, "..");
 const COPY_EXCLUDE = new Set(["node_modules", ".git", "dist", "generated", "uploads", "coverage", ".env"]);
 
-const nameOf = (selection: Selection) => `${selection.auth}+${selection.orm}+${selection.storage}`;
+const nameOf = (selection: Selection) =>
+  `${selection.auth}+${selection.orm}+${selection.storage}+${selection.redis}`;
 
+// deploy only adds config files, so it does not multiply the matrix
 const combinations = Object.keys(features.auth.options).flatMap((auth) =>
   Object.keys(features.orm.options).flatMap((orm) =>
-    Object.keys(features.storage.options).map(
-      // deploy only adds config files, so it does not multiply the matrix
-      (storage) => ({ auth, orm, storage, deploy: "railway" }) as Selection,
+    Object.keys(features.storage.options).flatMap((storage) =>
+      Object.keys(features.redis.options).map(
+        (redis) => ({ auth, orm, storage, redis, deploy: "railway" }) as Selection,
+      ),
     ),
   ),
 );
@@ -65,7 +68,23 @@ const verify = async (selection: Selection): Promise<Result> => {
 
     await applySelection(dir, selection, { removeSetup: true });
     await regenerateDatabaseArtifacts(dir, selection.orm);
+    await formatProject(dir);
+    // The module generator must produce working code for every selection
+    await exec(
+      "pnpm",
+      [
+        "exec",
+        "tsx",
+        "scripts/gen-module.ts",
+        "product-item",
+        "--fields",
+        "title:string notes:text? quantity:int price:float active:boolean releasedAt:datetime?",
+      ],
+      { cwd: dir },
+    );
     await exec("pnpm", ["exec", "tsc", "--noEmit"], { cwd: dir });
+    // Generated projects must also be lint- and format-clean (no leftovers from directives)
+    await exec("pnpm", ["exec", "biome", "check", "--error-on-warnings", "."], { cwd: dir });
     if (!values["no-tests"]) await exec("pnpm", ["exec", "vitest", "run"], { cwd: dir });
 
     await rm(dir, { recursive: true, force: true });

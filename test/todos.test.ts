@@ -121,7 +121,12 @@ describe("todos routes", () => {
   it("rejects an empty update and invalid ids", async () => {
     const todo = await createTodo("Patch me");
 
-    const empty = await app().inject({ method: "PATCH", url: `/api/todos/${todo.id}`, headers: alice, payload: {} });
+    const empty = await app().inject({
+      method: "PATCH",
+      url: `/api/todos/${todo.id}`,
+      headers: alice,
+      payload: {},
+    });
     expect(empty.statusCode).toBe(400);
 
     const badId = await app().inject({ method: "GET", url: "/api/todos/not-a-uuid", headers: alice });

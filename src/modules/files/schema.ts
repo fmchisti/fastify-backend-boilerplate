@@ -54,5 +54,10 @@ export const DeleteFileSchema = {
 
 export const CreateUploadUrlSchema = {
   body: CreateUploadUrlBodySchema,
-  response: { 200: UploadUrlResponseSchema, 415: ErrorResponseSchema, 501: ErrorResponseSchema, ...commonErrors },
+  response: {
+    200: UploadUrlResponseSchema,
+    415: ErrorResponseSchema,
+    501: ErrorResponseSchema,
+    ...commonErrors,
+  },
 };

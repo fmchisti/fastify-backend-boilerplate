@@ -1,18 +1,13 @@
 import { STATUS_CODES } from "node:http";
 import type { FastifyError, FastifyReply, FastifyRequest } from "fastify";
-import {
-  hasZodFastifySchemaValidationErrors,
-  isResponseSerializationError,
-} from "fastify-type-provider-zod";
+import { hasZodFastifySchemaValidationErrors, isResponseSerializationError } from "fastify-type-provider-zod";
 import { z } from "zod";
 
 /** Shape of every error response. Use in route `response` schemas for 4xx/5xx docs. */
 export const ErrorResponseSchema = z.object({
   error: z.string(),
   message: z.string(),
-  details: z
-    .array(z.object({ path: z.string(), message: z.string() }))
-    .optional(),
+  details: z.array(z.object({ path: z.string(), message: z.string() })).optional(),
 });
 
 export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
@@ -31,14 +26,11 @@ export class HttpError extends Error {
   }
 }
 
-const statusText = (statusCode: number): string =>
-  STATUS_CODES[statusCode] ?? "Error";
+const statusText = (statusCode: number): string => STATUS_CODES[statusCode] ?? "Error";
 
 const resolveStatusCode = (error: FastifyError): number => {
   const { statusCode } = error;
-  return typeof statusCode === "number" && statusCode >= 400 && statusCode < 600
-    ? statusCode
-    : 500;
+  return typeof statusCode === "number" && statusCode >= 400 && statusCode < 600 ? statusCode : 500;
 };
 
 export const errorHandler = (
@@ -61,9 +53,7 @@ export const errorHandler = (
 
   if (isResponseSerializationError(error)) {
     request.log.error({ err: error }, "Response did not match schema");
-    return reply
-      .status(500)
-      .send({ error: statusText(500), message: "An unexpected error occurred" });
+    return reply.status(500).send({ error: statusText(500), message: "An unexpected error occurred" });
   }
 
   const statusCode = resolveStatusCode(error);
@@ -81,10 +71,7 @@ export const errorHandler = (
   return reply.status(statusCode).send(body);
 };
 
-export const notFoundHandler = (
-  request: FastifyRequest,
-  reply: FastifyReply,
-): FastifyReply => {
+export const notFoundHandler = (request: FastifyRequest, reply: FastifyReply): FastifyReply => {
   const body: ErrorResponse = {
     error: statusText(404),
     message: `Route ${request.method} ${request.url} not found`,

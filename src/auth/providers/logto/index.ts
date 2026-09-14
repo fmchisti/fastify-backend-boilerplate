@@ -1,9 +1,4 @@
-import {
-  createRemoteJWKSet,
-  errors as joseErrors,
-  type JWTVerifyGetKey,
-  jwtVerify,
-} from "jose";
+import { createRemoteJWKSet, type JWTVerifyGetKey, errors as joseErrors, jwtVerify } from "jose";
 import { z } from "zod";
 import { loadEnv } from "../../../config/env.ts";
 import { getBearerToken } from "../../bearer.ts";

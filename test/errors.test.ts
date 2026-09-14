@@ -1,9 +1,5 @@
 import Fastify, { type FastifyInstance } from "fastify";
-import {
-  serializerCompiler,
-  validatorCompiler,
-  type ZodTypeProvider,
-} from "fastify-type-provider-zod";
+import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from "fastify-type-provider-zod";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { ErrorResponseSchema, errorHandler, HttpError, notFoundHandler } from "../src/lib/errors.ts";

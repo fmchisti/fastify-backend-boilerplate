@@ -3,7 +3,7 @@ import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import * as p from "@clack/prompts";
-import { regenerateDatabaseArtifacts, type Runner } from "./database.ts";
+import { formatProject, type Runner, regenerateDatabaseArtifacts } from "./database.ts";
 import { applySelection, describeSelection, nextStepsFor, validateSelection } from "./engine.ts";
 import { FEATURE_IDS, type FeatureId, features, type OptionManifest, type Selection } from "./features.ts";
 
@@ -13,7 +13,7 @@ vars for everything you do not select.
 
 Usage:
   pnpm setup:project                           interactive
-  pnpm setup:project --auth logto --orm prisma --storage s3 --deploy railway --yes
+  pnpm setup:project --auth logto --orm prisma --storage s3 --redis redis --deploy railway --yes
 
 Options:
 ${FEATURE_IDS.map((id) => `  --${id.padEnd(10)} ${Object.keys(features[id].options).join(" | ")}  (default: ${features[id].default})`).join("\n")}
@@ -47,6 +47,7 @@ const main = async () => {
       auth: { type: "string" },
       orm: { type: "string" },
       storage: { type: "string" },
+      redis: { type: "string" },
       deploy: { type: "string" },
       yes: { type: "boolean", default: false },
       dir: { type: "string", default: process.cwd() },
@@ -57,7 +58,13 @@ const main = async () => {
     },
   });
   // Fails to compile if a feature in features.ts has no matching flag above
-  const featureFlags: { [K in FeatureId]: string | undefined } = { auth: values.auth, orm: values.orm, storage: values.storage, deploy: values.deploy };
+  const featureFlags: { [K in FeatureId]: string | undefined } = {
+    auth: values.auth,
+    orm: values.orm,
+    storage: values.storage,
+    redis: values.redis,
+    deploy: values.deploy,
+  };
 
   if (values.help) {
     console.log(HELP);
@@ -68,7 +75,9 @@ const main = async () => {
   p.intro("Fastify boilerplate setup");
 
   if (!values.force && isGitDirty(cwd)) {
-    p.cancel("Git has uncommitted changes. Commit or stash them first (setup deletes files), or pass --force.");
+    p.cancel(
+      "Git has uncommitted changes. Commit or stash them first (setup deletes files), or pass --force.",
+    );
     process.exit(1);
   }
 
@@ -126,6 +135,8 @@ const main = async () => {
   // Always regenerate: the initial migration must match the selected schema
   p.log.step("Generating database migrations");
   await regenerateDatabaseArtifacts(cwd, chosen.orm, inheritRunner);
+  p.log.step("Formatting");
+  await formatProject(cwd, inheritRunner);
   p.log.step("Type-checking");
   run("pnpm", ["type-check"], cwd);
 

@@ -26,7 +26,7 @@ describe("GET /api/health/ready", () => {
     const response = await app().inject({ method: "GET", url: "/api/health/ready" });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ status: "ready", database: "up" });
+    expect(response.json()).toMatchObject({ status: "ready", checks: { database: "up" } });
   });
 
   it("returns 503 when the database is unreachable", async () => {
@@ -37,7 +37,7 @@ describe("GET /api/health/ready", () => {
     expect(response.statusCode).toBe(503);
     expect(response.json()).toEqual({
       error: "Service Unavailable",
-      message: "Database unreachable",
+      message: "Unavailable: database",
     });
   });
 });

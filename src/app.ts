@@ -4,11 +4,7 @@ import fastifyRateLimit from "@fastify/rate-limit";
 import fastifySwagger from "@fastify/swagger";
 import fastifySwaggerUi from "@fastify/swagger-ui";
 import Fastify from "fastify";
-import {
-  serializerCompiler,
-  validatorCompiler,
-  type ZodTypeProvider,
-} from "fastify-type-provider-zod";
+import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { APP_NAME, APP_VERSION } from "./config/app-info.ts";
 import { type Env, env as processEnv } from "./config/env.ts";
@@ -17,9 +13,7 @@ import { createSwaggerOptions, createSwaggerUiOptions } from "./config/swagger.t
 import { type AppDependencies, createDependencies } from "./container.ts";
 import { errorHandler, HttpError, notFoundHandler } from "./lib/errors.ts";
 import { generateRequestId, REQUEST_ID_HEADER } from "./lib/request-id.ts";
-// @setup-if storage=s3,local
-import fileRoutes from "./modules/files/routes.ts";
-// @setup-endif
+import fileRoutes from "./modules/files/routes.ts"; // @setup-if storage=s3,local
 import healthRoutes from "./modules/health/routes.ts";
 import meRoutes from "./modules/me/routes.ts";
 import todoRoutes from "./modules/todos/routes.ts";
@@ -75,6 +69,9 @@ export const buildApp = async (
   app.addHook("onClose", async () => {
     await deps.auth.close?.();
     await deps.database.close();
+    // @setup-if redis=redis
+    await deps.redis.quit();
+    // @setup-endif
   });
 
   await app.register(fastifyHelmet, {
@@ -88,12 +85,20 @@ export const buildApp = async (
     credentials: true,
     exposedHeaders: [REQUEST_ID_HEADER, "retry-after"],
   });
-  // In-memory store: limits are per instance. Use a Redis store when running several instances.
   await app.register(fastifyRateLimit, {
     max: env.RATE_LIMIT_MAX,
     timeWindow: env.RATE_LIMIT_WINDOW,
     errorResponseBuilder: (_request, context) =>
       new HttpError(429, `Too many requests, retry in ${context.after}`),
+    // @setup-if redis=none
+    // In-memory store: limits are per instance. Choose Redis in setup to share them across instances.
+    // @setup-endif
+    // @setup-if redis=redis
+    // Shared across instances. If Redis is unavailable, requests are allowed rather than failing.
+    redis: deps.redis,
+    nameSpace: "rate-limit:",
+    skipOnError: true,
+    // @setup-endif
   });
 
   await app.register(fastifySwagger, createSwaggerOptions(env));
@@ -104,9 +109,20 @@ export const buildApp = async (
   if (deps.auth.routes) {
     await app.register(deps.auth.routes, { prefix: "/api/auth" });
   }
-  await app.register(healthRoutes, { prefix: "/api", database: deps.database });
+  await app.register(healthRoutes, {
+    prefix: "/api",
+    checks: {
+      database: () => deps.database.ping(),
+      // @setup-if redis=redis
+      redis: async () => {
+        await deps.redis.ping();
+      },
+      // @setup-endif
+    },
+  });
   await app.register(meRoutes, { prefix: "/api" });
   await app.register(todoRoutes, { prefix: "/api", repository: deps.todos });
+  // @gen:routes
   // @setup-if storage=s3,local
   await app.register(fileRoutes, { prefix: "/api", storage: deps.storage });
   // @setup-endif

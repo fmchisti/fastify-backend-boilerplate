@@ -6,7 +6,11 @@ import type { Selection } from "./features.ts";
 
 const execFileAsync = promisify(execFile);
 
-export type Runner = (command: string, args: string[], options: { cwd: string; env: NodeJS.ProcessEnv }) => Promise<void>;
+export type Runner = (
+  command: string,
+  args: string[],
+  options: { cwd: string; env: NodeJS.ProcessEnv },
+) => Promise<void>;
 
 /** Runs a command and only surfaces output when it fails. */
 export const quietRunner: Runner = async (command, args, options) => {
@@ -38,11 +42,23 @@ export const regenerateDatabaseArtifacts = async (
   await run(
     "pnpm",
     [
-      "exec", "prisma", "migrate", "diff",
-      "--from-empty", "--to-schema", "prisma/schema",
-      "--script", "-o", "prisma/migrations/0_init/migration.sql",
+      "exec",
+      "prisma",
+      "migrate",
+      "diff",
+      "--from-empty",
+      "--to-schema",
+      "prisma/schema",
+      "--script",
+      "-o",
+      "prisma/migrations/0_init/migration.sql",
     ],
     { cwd, env },
   );
   await writeFile(path.join(migrations, "migration_lock.toml"), 'provider = "postgresql"\n');
+};
+
+/** Format and organize imports after directives removed code, so the new project starts lint-clean. */
+export const formatProject = async (cwd: string, run: Runner = quietRunner): Promise<void> => {
+  await run("pnpm", ["exec", "biome", "check", "--write", "."], { cwd, env: process.env });
 };

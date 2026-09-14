@@ -61,11 +61,18 @@ describe("S3 storage provider", () => {
 
     await storage.delete("u1/a.png");
 
-    expect(s3.commandCalls(DeleteObjectCommand)[0]?.args[0].input).toEqual({ Bucket: "test-bucket", Key: "u1/a.png" });
+    expect(s3.commandCalls(DeleteObjectCommand)[0]?.args[0].input).toEqual({
+      Bucket: "test-bucket",
+      Key: "u1/a.png",
+    });
   });
 
   it("creates a presigned PUT URL bound to the content type", async () => {
-    const upload = await storage.createUploadUrl?.({ key: "u1/a.png", contentType: "image/png", expiresInSeconds: 60 });
+    const upload = await storage.createUploadUrl?.({
+      key: "u1/a.png",
+      contentType: "image/png",
+      expiresInSeconds: 60,
+    });
 
     expect(upload?.method).toBe("PUT");
     const url = new URL(upload?.url ?? "");

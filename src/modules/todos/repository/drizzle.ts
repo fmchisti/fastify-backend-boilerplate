@@ -63,10 +63,7 @@ export const createTodoRepository = ({ client: db }: AppDatabase): TodoRepositor
   },
 
   delete: async (userId, id) => {
-    const deleted = await db
-      .delete(todos)
-      .where(byOwner(userId, id))
-      .returning({ id: todos.id });
+    const deleted = await db.delete(todos).where(byOwner(userId, id)).returning({ id: todos.id });
     return deleted.length > 0;
   },
 });

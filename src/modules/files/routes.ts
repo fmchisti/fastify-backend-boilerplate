@@ -5,12 +5,7 @@ import { authenticate, getAuthUser } from "../../auth/middleware.ts";
 import { loadEnv } from "../../config/env.ts";
 import { HttpError } from "../../lib/errors.ts";
 import type { StorageProvider } from "../../storage/index.ts";
-import {
-  CreateUploadUrlSchema,
-  DeleteFileSchema,
-  DownloadFileSchema,
-  UploadFileSchema,
-} from "./schema.ts";
+import { CreateUploadUrlSchema, DeleteFileSchema, DownloadFileSchema, UploadFileSchema } from "./schema.ts";
 import { createFilesService, type FilesConfig, isContentTypeAllowed } from "./service.ts";
 
 const filesEnvSchema = z.object({
@@ -19,7 +14,12 @@ const filesEnvSchema = z.object({
   UPLOAD_ALLOWED_CONTENT_TYPES: z
     .string()
     .default("image/png,image/jpeg,image/webp,image/gif,application/pdf")
-    .transform((value) => value.split(",").map((type) => type.trim().toLowerCase()).filter(Boolean)),
+    .transform((value) =>
+      value
+        .split(",")
+        .map((type) => type.trim().toLowerCase())
+        .filter(Boolean),
+    ),
   UPLOAD_URL_EXPIRES_IN_SECONDS: z.coerce.number<string>().int().positive().default(300),
 });
 
@@ -85,7 +85,8 @@ const fileRoutes: FastifyPluginAsyncZod<FileRoutesOptions> = async (fastify, opt
       ...CreateUploadUrlSchema,
       ...tags,
       summary: "Create a presigned upload URL",
-      description: "Upload directly to the bucket with the returned method and headers. Not supported by local storage.",
+      description:
+        "Upload directly to the bucket with the returned method and headers. Not supported by local storage.",
     },
     handler: async (request) => service.createUploadUrl(getAuthUser(request).id, request.body),
   });

@@ -2,9 +2,8 @@ import { createAuthProvider } from "./auth/index.ts";
 import type { AuthProvider } from "./auth/types.ts";
 import { type AppDatabase, createDatabase, type Database } from "./db/index.ts";
 import { createTodoRepository, type TodoRepository } from "./modules/todos/repository/index.ts";
-// @setup-if storage=s3,local
-import { createStorage, type StorageProvider } from "./storage/index.ts";
-// @setup-endif
+import { createRedis, type Redis } from "./redis/index.ts"; // @setup-if redis=redis
+import { createStorage, type StorageProvider } from "./storage/index.ts"; // @setup-if storage=s3,local
 
 /**
  * Everything the app needs from the outside world.
@@ -15,8 +14,12 @@ export interface AppDependencies {
   database: Database;
   auth: AuthProvider;
   todos: TodoRepository;
+  // @gen:dependencies (pnpm gen:module inserts repositories above)
   // @setup-if storage=s3,local
   storage: StorageProvider;
+  // @setup-endif
+  // @setup-if redis=redis
+  redis: Redis;
   // @setup-endif
 }
 
@@ -35,8 +38,12 @@ export const createDependencies = (
   return {
     auth: overrides.auth ?? createAuthProvider({ database: getDatabase, trustedOrigins: config.corsOrigins }),
     todos: overrides.todos ?? createTodoRepository(getDatabase()),
+    // @gen:factories
     // @setup-if storage=s3,local
     storage: overrides.storage ?? createStorage(),
+    // @setup-endif
+    // @setup-if redis=redis
+    redis: overrides.redis ?? createRedis(),
     // @setup-endif
     database: overrides.database ?? getDatabase(),
   };

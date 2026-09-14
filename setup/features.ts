@@ -91,7 +91,11 @@ export const features = {
         dependencies: ["firebase-admin"],
         env: [
           { key: "FIREBASE_PROJECT_ID", example: "your-project-id" },
-          { key: "FIREBASE_CLIENT_EMAIL", example: "", comment: "Optional: service account, needed for other Admin APIs" },
+          {
+            key: "FIREBASE_CLIENT_EMAIL",
+            example: "",
+            comment: "Optional: service account, needed for other Admin APIs",
+          },
           { key: "FIREBASE_PRIVATE_KEY", example: "", comment: "Optional: keep \\n escapes on one line" },
         ],
       },
@@ -102,7 +106,11 @@ export const features = {
         dependencies: ["jose"],
         env: [
           { key: "LOGTO_ENDPOINT", example: "https://your-tenant.logto.app" },
-          { key: "LOGTO_API_RESOURCE", example: "https://api.example.com", comment: "API resource indicator" },
+          {
+            key: "LOGTO_API_RESOURCE",
+            example: "https://api.example.com",
+            comment: "API resource indicator",
+          },
         ],
         nextSteps: ["Create an API resource in Logto and request tokens for it from your client"],
       },
@@ -123,6 +131,7 @@ export const features = {
           "src/modules/todos/repository/drizzle.ts",
           "src/auth/providers/better-auth/database/drizzle.ts",
           "test/repositories/todos.drizzle.test.ts",
+          "test/repositories/drizzle-harness.ts",
           "test/repositories/drizzle-migrate.test.ts",
         ],
         dependencies: ["drizzle-orm"],
@@ -148,6 +157,7 @@ export const features = {
           "src/modules/todos/repository/prisma.ts",
           "src/auth/providers/better-auth/database/prisma.ts",
           "test/repositories/todos.prisma.test.ts",
+          "test/repositories/prisma-harness.ts",
         ],
         // prisma CLI is a runtime dependency so `migrate deploy` works in production images
         dependencies: ["@prisma/client", "@prisma/adapter-pg", "prisma"],
@@ -182,9 +192,17 @@ export const features = {
         env: [
           { key: "S3_BUCKET", example: "my-bucket" },
           { key: "S3_REGION", example: "us-east-1" },
-          { key: "S3_ENDPOINT", example: "", comment: "Only for S3-compatible services (R2, MinIO, Railway)" },
+          {
+            key: "S3_ENDPOINT",
+            example: "",
+            comment: "Only for S3-compatible services (R2, MinIO, Railway)",
+          },
           { key: "S3_FORCE_PATH_STYLE", example: "false", comment: "true for MinIO" },
-          { key: "S3_ACCESS_KEY_ID", example: "", comment: "Omit both keys to use the AWS default credential chain" },
+          {
+            key: "S3_ACCESS_KEY_ID",
+            example: "",
+            comment: "Omit both keys to use the AWS default credential chain",
+          },
           { key: "S3_SECRET_ACCESS_KEY", example: "" },
           ...files.env,
         ],
@@ -204,6 +222,32 @@ export const features = {
     },
   },
 
+  redis: {
+    label: "Redis",
+    default: "none",
+    options: {
+      none: {
+        label: "None",
+        hint: "rate limits in memory (per instance)",
+      },
+      redis: {
+        label: "Redis",
+        hint: "shared rate limits across instances, readiness check; reuse for caching",
+        paths: ["src/redis", "test/redis.test.ts", "test/fakes/redis.ts"],
+        dependencies: ["ioredis"],
+        devDependencies: ["ioredis-mock", "@types/ioredis-mock"],
+        env: [
+          {
+            key: "REDIS_URL",
+            example: "redis://localhost:6379",
+            comment: "Docker: pnpm db:up. Railway: add a Redis service and use its REDIS_URL",
+          },
+        ],
+        nextSteps: ["Redis: set REDIS_URL (docker compose starts one locally with pnpm db:up)"],
+      },
+    },
+  },
+
   deploy: {
     label: "Deploy target",
     default: "none",
@@ -214,6 +258,7 @@ export const features = {
         paths: ["railway.json"],
         scripts: { deploy: "railway up" },
         nextSteps: [
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: Railway reference variable syntax
           "Railway: add a Postgres service and set DATABASE_URL=${{Postgres.DATABASE_URL}}",
           "Railway: set TRUST_PROXY=true and CORS_ORIGINS to your frontend URL",
         ],
@@ -231,7 +276,7 @@ export type Selection = { [K in FeatureId]: keyof (typeof features)[K]["options"
 export const FEATURE_IDS = Object.keys(features) as FeatureId[];
 
 /** Always removed after setup unless --keep-setup. */
-export const SETUP_PATHS = ["setup", "test/setup"];
+export const SETUP_PATHS = ["setup", "test/setup", "docs/template.md"];
 export const SETUP_DEV_DEPENDENCIES = ["@clack/prompts", "tinyglobby"];
 export const SETUP_SCRIPTS = ["setup:project", "setup:verify"];
 
@@ -240,8 +285,16 @@ export const CORE_ENV: EnvEntry[] = [
   { key: "PORT", example: "3000" },
   { key: "HOST", example: "0.0.0.0" },
   { key: "LOG_LEVEL", example: "info" },
-  { key: "BACKEND_URL", example: "http://localhost:3000", comment: "Public URL of this API (OpenAPI servers)" },
-  { key: "CORS_ORIGINS", example: "http://localhost:5173", comment: "Allowed browser origins, comma-separated" },
+  {
+    key: "BACKEND_URL",
+    example: "http://localhost:3000",
+    comment: "Public URL of this API (OpenAPI servers)",
+  },
+  {
+    key: "CORS_ORIGINS",
+    example: "http://localhost:5173",
+    comment: "Allowed browser origins, comma-separated",
+  },
   {
     key: "TRUST_PROXY",
     example: "false",
@@ -251,12 +304,21 @@ export const CORE_ENV: EnvEntry[] = [
     key: "DATABASE_URL",
     example: "postgresql://postgres:postgres@localhost:5432/app",
     comment:
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Railway reference variable syntax
       "Docker: pnpm db:up. Railway: ${{Postgres.DATABASE_URL}}. Supabase: Project Settings > Database > Connection string",
   },
   { key: "DATABASE_POOL_MAX", example: "10", comment: "Max DB connections per instance" },
-  { key: "RATE_LIMIT_MAX", example: "300", comment: "Requests per client IP per window (in-memory, per instance)" },
+  {
+    key: "RATE_LIMIT_MAX",
+    example: "300",
+    comment: "Requests per client IP per window (in-memory, per instance)",
+  },
   { key: "RATE_LIMIT_WINDOW", example: "1 minute" },
-  { key: "SHUTDOWN_TIMEOUT_SECONDS", example: "10", comment: "Grace period for in-flight requests on SIGTERM" },
+  {
+    key: "SHUTDOWN_TIMEOUT_SECONDS",
+    example: "10",
+    comment: "Grace period for in-flight requests on SIGTERM",
+  },
   { key: "DOCS_ENABLED", example: "", comment: "Swagger UI at /api/docs. Default: on, except in production" },
   { key: "DOCS_USERNAME", example: "", comment: "When both set, /api/docs requires HTTP Basic Auth" },
   { key: "DOCS_PASSWORD", example: "" },

@@ -1,6 +1,8 @@
 import pino from "pino";
 import { describe, expect, it, vi } from "vitest";
+import { buildApp } from "../src/app.ts";
 import { createShutdownHandler } from "../src/lib/shutdown.ts";
+import { createTestDependencies, testEnv } from "./helpers.ts";
 
 const logger = pino({ level: "silent" });
 
@@ -67,9 +69,7 @@ describe("createShutdownHandler", () => {
 });
 
 describe("app.close() with in-flight requests", () => {
-  it("lets in-flight requests finish and rejects new connections", async () => {
-    const { buildApp } = await import("../src/app.ts");
-    const { createTestDependencies, testEnv } = await import("./helpers.ts");
+  it("lets in-flight requests finish, then refuses new connections", async () => {
     const app = await buildApp(createTestDependencies(), { env: testEnv() });
     let release: () => void = () => undefined;
     let markEntered: () => void = () => undefined;
@@ -90,7 +90,8 @@ describe("app.close() with in-flight requests", () => {
     await entered;
 
     const closing = app.close();
-    await expect(fetch(`${url}/api/health`)).rejects.toThrow();
+    // preClose hooks have run once the server stops listening
+    await vi.waitFor(() => expect(app.server.listening).toBe(false));
 
     release();
     const response = await inFlight;
@@ -98,9 +99,13 @@ describe("app.close() with in-flight requests", () => {
     expect(response.headers.get("connection")).toBe("close");
     expect(await response.json()).toEqual({ done: true });
 
-    // Resolves promptly instead of waiting for the keep-alive timeout
+    // Resolves well before Node's 5s keep-alive timeout would release the socket
     const started = Date.now();
     await closing;
-    expect(Date.now() - started).toBeLessThan(1000);
-  });
+    expect(Date.now() - started).toBeLessThan(3000);
+
+    // Once closed, new connections are refused
+    await expect(fetch(`${url}/api/health`)).rejects.toThrow();
+    // Real sockets: allow for slow CI machines
+  }, 15_000);
 });

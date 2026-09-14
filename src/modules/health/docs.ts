@@ -14,5 +14,5 @@ export const healthCheckDocs = {
 export const readinessDocs = {
   tags: [TAG],
   summary: "Get API readiness",
-  description: "Returns 503 when the database is unreachable.",
+  description: "Checks every dependency (database, and Redis when used). Returns 503 if any is unreachable.",
 } as const;

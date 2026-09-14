@@ -1,7 +1,8 @@
+import { readdir } from "node:fs/promises";
 import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type AppDatabase, createDatabase } from "../../src/db/drizzle/index.ts";
-import { runMigrations } from "../../src/db/drizzle/migrate.ts";
+import { MIGRATIONS_FOLDER, runMigrations } from "../../src/db/drizzle/migrate.ts";
 import { startTestPostgres, type TestPostgres } from "../postgres.ts";
 
 describe("Drizzle production migrator", () => {
@@ -28,6 +29,7 @@ describe("Drizzle production migrator", () => {
     expect(tables.rows.map((row) => row.table_name)).toContain("todos");
 
     const applied = await database.client.execute(sql`select id from drizzle.__drizzle_migrations`);
-    expect(applied.rows).toHaveLength(1);
+    const files = (await readdir(MIGRATIONS_FOLDER)).filter((file) => file.endsWith(".sql"));
+    expect(applied.rows).toHaveLength(files.length);
   });
 });

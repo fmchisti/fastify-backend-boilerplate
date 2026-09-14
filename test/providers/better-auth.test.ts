@@ -52,7 +52,9 @@ describe("Better Auth provider", () => {
     expect(signIn.statusCode).toBe(200);
 
     const setCookie = signIn.headers["set-cookie"];
-    const cookies = (Array.isArray(setCookie) ? setCookie : [setCookie ?? ""]).map((c) => c.split(";")[0]).join("; ");
+    const cookies = (Array.isArray(setCookie) ? setCookie : [setCookie ?? ""])
+      .map((c) => c.split(";")[0])
+      .join("; ");
     const me = await app.inject({ method: "GET", url: "/api/me", headers: { cookie: cookies } });
     expect(me.statusCode).toBe(200);
   });
