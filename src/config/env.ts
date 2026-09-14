@@ -28,18 +28,20 @@ const commaList = z.string().transform((value) =>
 );
 
 /**
- * Fastify `trustProxy`: "false" (default), "true" (trust all), a hop count ("1"),
- * or comma-separated IPs/CIDRs ("10.0.0.0/8,127.0.0.1").
+ * Fastify `trustProxy`: "false" (default), "true" (trust all), or comma-separated IPs/CIDRs
+ * ("10.0.0.0/8,127.0.0.1"). Hop counts are rejected: Fastify 5.12+ ignores them and trusts no proxy.
  * Enable behind a reverse proxy (Railway, Render, Fly, a load balancer) so
  * `request.ip` and rate limiting use the real client address.
  */
 export const TrustProxySchema = z
   .string()
   .default("false")
-  .transform((value): boolean | number | string[] => {
+  .refine((value) => !/^\d+$/.test(value.trim()), {
+    message: "TRUST_PROXY hop counts are not supported; use true, false, or proxy IPs/CIDRs",
+  })
+  .transform((value): boolean | string[] => {
     if (value === "true") return true;
     if (value === "false" || value === "") return false;
-    if (/^\d+$/.test(value)) return Number(value);
     return value
       .split(",")
       .map((item) => item.trim())

@@ -1,0 +1,7 @@
+# Dependencies allowed to run install scripts (true) or skipped (false). Needs pnpm 10.28+.
+allowBuilds:
+  "@firebase/util": false
+  "@prisma/engines": true
+  esbuild: false
+  prisma: true
+  protobufjs: false

@@ -71,6 +71,22 @@ pnpm create fastra my-api
 pnpm create fastra my-api --auth logto --orm prisma --storage s3 --redis redis --deploy railway --yes
 ```
 
+**Inside a monorepo** (Turborepo or any pnpm workspace), run it from the monorepo root with a folder the workspace lists, such as `apps/*`:
+
+```bash
+pnpm create fastra apps/api
+pnpm turbo run dev --filter=api   # or: pnpm --filter api dev
+```
+
+`pnpm create fastra` detects the workspace and fits the API into it:
+- It uses the workspace's lockfile and pnpm version. The API gets no `pnpm-lock.yaml`, `pnpm-workspace.yaml`, or `packageManager` of its own.
+- It adds the install-script approvals the API needs (for example Prisma's engines) to `allowBuilds` in the root `pnpm-workspace.yaml`, and leaves your existing entries alone.
+- It does not create a nested git repository, and it removes the API's `.github/`, because GitHub only runs workflows at the repository root.
+- With Turborepo, it adds `apps/api/turbo.json` so cached builds restore `dist/`, plus a `check-types` script.
+- It needs pnpm 10.28 or later, the first release that reads `allowBuilds`.
+
+The Dockerfile builds standalone projects only for now: inside a monorepo it cannot see the root lockfile.
+
 
 **With pnpm, step by step** (no GitHub step):
 
@@ -242,7 +258,7 @@ Built in:
 - **Graceful shutdown**: on SIGTERM, stops accepting connections, finishes in-flight requests (up to `SHUTDOWN_TIMEOUT_SECONDS`), closes connections, exits 0.
 - **Health checks**: `/api/health` (liveness) and `/api/health/ready` (database, and Redis when used), never rate limited.
 - **Security headers** (`@fastify/helmet`), **CORS** from `CORS_ORIGINS`, **rate limiting** per client IP (`RATE_LIMIT_MAX` per `RATE_LIMIT_WINDOW`).
-- **`TRUST_PROXY=true`** behind Railway, Render, Fly, or a load balancer, so client IPs (rate limits, auth logs) are real. Leave `false` when exposed directly.
+- **`TRUST_PROXY=true`** behind Railway, Render, Fly, or a load balancer, so client IPs (rate limits, auth logs) are real, or list the proxy IPs/CIDRs (`10.0.0.0/8`). Leave `false` when exposed directly. Hop counts (`TRUST_PROXY=1`) are rejected at startup: Fastify ignores them.
 - **Request IDs**: `x-request-id` is accepted from your proxy or generated, returned on every response, and logged as `requestId`. Authorization and cookie headers are redacted from logs.
 - **API docs** are off in production unless `DOCS_ENABLED=true` (protect them with `DOCS_USERNAME`/`DOCS_PASSWORD`).
 <!-- @setup-if orm!=none -->
@@ -266,7 +282,7 @@ docker run --rm --env-file .env api pnpm db:migrate:deploy
 docker run --env-file .env -p 3000:3000 api
 ```
 
-Multi-stage image on `node:22-alpine`, production dependencies only, runs as the `node` user, with a `HEALTHCHECK`. CI builds the image, runs migrations against Postgres, calls the API, and checks that `docker stop` exits cleanly.
+Multi-stage image on `node:22-alpine`, production dependencies only, runs as the `node` user, with a `HEALTHCHECK`. It needs `pnpm-lock.yaml` and `pnpm-workspace.yaml` next to it, so it builds standalone projects, not an API inside a monorepo. CI builds the image, runs migrations against Postgres, calls the API, and checks that `docker stop` exits cleanly.
 <!-- @setup-if deploy=railway -->
 
 ### Railway

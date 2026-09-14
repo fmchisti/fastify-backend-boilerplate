@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  allowBuildsFor,
   allowedOptions,
   incompatibility,
   pathsToRemove,
   processDirectives,
   renameReadme,
   renderEnvExample,
+  renderWorkspaceYaml,
   toProjectName,
   updatePackageJson,
   validateProjectName,
@@ -477,5 +479,31 @@ describe("real features manifest", () => {
         }
       }
     }
+  });
+});
+
+describe("allowBuilds", () => {
+  it("approves install scripts only for the selected options", () => {
+    const selection = { auth: "none", orm: "drizzle", storage: "none", redis: "none", deploy: "none" };
+    expect(allowBuildsFor(selection)).toEqual({ esbuild: false });
+    expect(allowBuildsFor({ ...selection, auth: "firebase", orm: "prisma" })).toEqual({
+      "@firebase/util": false,
+      "@prisma/engines": true,
+      esbuild: false,
+      prisma: true,
+      protobufjs: false,
+    });
+  });
+
+  it("renders pnpm-workspace.yaml with quoted scoped names", () => {
+    expect(renderWorkspaceYaml({ "@prisma/engines": true, esbuild: false })).toContain(
+      'allowBuilds:\n  "@prisma/engines": true\n  esbuild: false\n',
+    );
+  });
+
+  it("matches the template's pnpm-workspace.yaml", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const file = new URL("../../pnpm-workspace.yaml", import.meta.url);
+    expect(await readFile(file, "utf8")).toBe(renderWorkspaceYaml(allowBuildsFor()));
   });
 });

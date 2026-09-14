@@ -31,11 +31,16 @@ describe("parseEnv", () => {
     [undefined, false],
     ["false", false],
     ["true", true],
-    ["2", 2],
     ["10.0.0.0/8, 127.0.0.1", ["10.0.0.0/8", "127.0.0.1"]],
   ])("parses TRUST_PROXY=%s", (value, expected) => {
     expect(parseEnv({ ...validEnv, ...(value !== undefined && { TRUST_PROXY: value }) }).TRUST_PROXY).toEqual(
       expected,
+    );
+  });
+
+  it("rejects a TRUST_PROXY hop count, which Fastify ignores", () => {
+    expect(() => parseEnv({ ...validEnv, TRUST_PROXY: "2" })).toThrow(
+      /TRUST_PROXY hop counts are not supported/,
     );
   });
 

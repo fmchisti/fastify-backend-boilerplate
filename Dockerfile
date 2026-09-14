@@ -19,7 +19,7 @@ WORKDIR /app
 
 # ---------------------------------------------------------------------------
 FROM base AS build
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN corepack install
 # Download packages using only the lockfile, so this layer is cached until dependencies change
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm fetch

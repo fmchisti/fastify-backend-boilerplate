@@ -1,5 +1,8 @@
 {
   "version": 1,
+  "allowBuilds": {
+    "esbuild": false
+  },
   "features": [
     {
       "id": "auth",
@@ -22,7 +25,11 @@
         {
           "value": "firebase",
           "label": "Firebase Auth",
-          "hint": "verifies Firebase ID tokens"
+          "hint": "verifies Firebase ID tokens",
+          "allowBuilds": {
+            "@firebase/util": false,
+            "protobufjs": false
+          }
         },
         {
           "value": "logto",
@@ -49,7 +56,11 @@
         {
           "value": "prisma",
           "label": "Prisma",
-          "hint": "schema-first with generated client"
+          "hint": "schema-first with generated client",
+          "allowBuilds": {
+            "prisma": true,
+            "@prisma/engines": true
+          }
         },
         {
           "value": "none",

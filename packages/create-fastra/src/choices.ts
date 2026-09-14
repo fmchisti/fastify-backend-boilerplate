@@ -8,6 +8,7 @@ export interface ChoiceOption {
   label: string;
   hint?: string;
   requires?: Record<string, string[]>;
+  allowBuilds?: Record<string, boolean>;
 }
 
 export interface ChoiceFeature {
@@ -19,41 +20,49 @@ export interface ChoiceFeature {
 
 export interface Choices {
   version: 1;
+  /** Install-script approvals every project needs; options add their own. */
+  allowBuilds: Record<string, boolean>;
   features: ChoiceFeature[];
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const isAllowBuilds = (value: unknown): value is Record<string, boolean> =>
+  isRecord(value) && Object.values(value).every((allowed) => typeof allowed === "boolean");
+
 const isOption = (value: unknown): value is ChoiceOption =>
   isRecord(value) &&
-  typeof value["value"] === "string" &&
-  typeof value["label"] === "string" &&
-  (value["hint"] === undefined || typeof value["hint"] === "string") &&
-  (value["requires"] === undefined ||
-    (isRecord(value["requires"]) &&
-      Object.values(value["requires"]).every(
+  typeof value.value === "string" &&
+  typeof value.label === "string" &&
+  (value.hint === undefined || typeof value.hint === "string") &&
+  (value.requires === undefined ||
+    (isRecord(value.requires) &&
+      Object.values(value.requires).every(
         (list) => Array.isArray(list) && list.every((item) => typeof item === "string"),
-      )));
+      ))) &&
+  (value.allowBuilds === undefined || isAllowBuilds(value.allowBuilds));
 
 const isFeature = (value: unknown): value is ChoiceFeature =>
   isRecord(value) &&
-  typeof value["id"] === "string" &&
-  typeof value["label"] === "string" &&
-  typeof value["default"] === "string" &&
-  Array.isArray(value["options"]) &&
-  value["options"].length > 0 &&
-  value["options"].every(isOption);
+  typeof value.id === "string" &&
+  typeof value.label === "string" &&
+  typeof value.default === "string" &&
+  Array.isArray(value.options) &&
+  value.options.length > 0 &&
+  value.options.every(isOption);
 
 /** Reads the template's choices, or `null` for templates that do not ship them. */
 export const readChoices = async (templateDir: string): Promise<Choices | null> => {
   const file = path.join(templateDir, "setup", "choices.json");
   if (!existsSync(file)) return null;
   const parsed: unknown = JSON.parse(await readFile(file, "utf8"));
-  if (!isRecord(parsed) || parsed["version"] !== 1 || !Array.isArray(parsed["features"])) return null;
-  const list: unknown[] = parsed["features"];
+  if (!isRecord(parsed) || parsed.version !== 1 || !Array.isArray(parsed.features)) return null;
+  const list: unknown[] = parsed.features;
   if (!list.every(isFeature)) return null;
-  return { version: 1, features: list };
+  // Older templates have no allowBuilds
+  const allowBuilds = isAllowBuilds(parsed.allowBuilds) ? parsed.allowBuilds : {};
+  return { version: 1, allowBuilds, features: list };
 };
 
 /** Same rules as the template's setup engine: options whose `requires` fit the answers so far. */
@@ -125,12 +134,32 @@ export const parseSetupFlags = (args: string[], featureIds: string[]): SetupFlag
   return flags;
 };
 
-/** Arguments for a non-interactive `pnpm setup:project` run with every answer filled in. */
+/** Install-script approvals for the chosen options, or for every option in the template. */
+export const allowBuildsFor = (
+  choices: Choices,
+  answers?: Record<string, string>,
+): Record<string, boolean> => {
+  const merged: Record<string, boolean> = { ...choices.allowBuilds };
+  for (const feature of choices.features) {
+    for (const option of feature.options) {
+      if (answers === undefined || answers[feature.id] === option.value)
+        Object.assign(merged, option.allowBuilds);
+    }
+  }
+  return merged;
+};
+
+/**
+ * Arguments for a non-interactive `pnpm setup:project` run with every answer filled in.
+ * `--force` skips setup's uncommitted-changes check: the folder is new, and inside a monorepo
+ * the repository is always dirty because of it.
+ */
 export const toSetupArgs = (name: string, answers: Record<string, string>, rest: string[]): string[] => [
   "--name",
   name,
   ...Object.entries(answers).flatMap(([feature, value]) => [`--${feature}`, value]),
   "--yes",
+  ...(rest.includes("--force") ? [] : ["--force"]),
   ...rest,
 ];
 
