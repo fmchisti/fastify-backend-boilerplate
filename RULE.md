@@ -7,7 +7,7 @@ These rules apply when editing this codebase. AI agents and developers should fo
 ## General
 
 - **Single source of truth:** Env in `src/config/env.ts`, DB schema in `src/db/schema.ts`, API docs via Zod schemas + Swagger. Keep them in sync when adding features.
-- **No business logic in `src/index.ts`.** Entry only wires config, plugins, and routes.
+- **No business logic in `src/index.ts` or `src/app.ts`.** They only wire config, plugins, and routes.
 - **One feature per module** under `src/modules/<name>/`. Do not create cross-cutting top-level folders (e.g. `src/services/`, `src/utils/`) without explicit agreement; prefer module-local or shared types.
 
 ---
@@ -15,16 +15,18 @@ These rules apply when editing this codebase. AI agents and developers should fo
 ## TypeScript & Fastify
 
 - Use **Zod** for all request/response validation and schema definitions. Attach schemas to routes so `fastify-type-provider-zod` validates and serializes.
-- Use `FastifyError` and set `statusCode` when throwing or passing errors so the global error handler returns the right status.
-- Prefer `async` handlers and `reply.send()` (or throwing) instead of mixing callbacks.
-- Use the existing **global error handler** for consistent JSON error shape; avoid ad-hoc `reply.status(...).send({ error: ... })` in handlers unless you need a special response.
+- Throw `HttpError` (`src/lib/errors.ts`) for expected failures so the global error handler returns the right status and shape.
+- Use `async` handlers that **return** the response value. Avoid ad-hoc `reply.status(...).send({ error: ... })`.
+- Type handlers with `ZodRouteHandler<typeof Schema>` and route plugins with `FastifyPluginAsyncZod`.
+- Strict TypeScript: no `any`, no non-null `!`, no `as` casts to bypass errors.
+- Log with `request.log` inside requests (keeps request IDs). Pino signature is `log.info(obj, msg)`, object first.
 
 ---
 
 ## Modules
 
-- **routes.ts:** Register routes with `fastify.withTypeProvider<ZodTypeProvider>().route({ method, url, schema, handler })`. Include OpenAPI `tags`, `summary`, `description` (from `docs.ts`).
-- **handler.ts:** Thin layer: call service, then `reply.send()`. Do not put business logic or complex branching here.
+- **routes.ts:** `const routes: FastifyPluginAsyncZod = async (fastify) => { fastify.route({ method, url, schema, handler }) }`. Include OpenAPI `tags`, `summary`, `description` (from `docs.ts`).
+- **handler.ts:** `ZodRouteHandler<typeof Schema>`. Thin layer: call service, return result. Do not put business logic or complex branching here.
 - **service.ts:** Business logic and DB. Import `db` from `src/db` or `src/config/database`. No `request`/`reply`.
 - **schema.ts:** Zod schemas; export both the Zod schema and any Fastify `response` schema used in routes.
 - **docs.ts:** Export objects like `{ tags: ["Tag"], summary: "...", description: "..." }` and spread into route schema.
@@ -41,9 +43,16 @@ These rules apply when editing this codebase. AI agents and developers should fo
 
 ## Auth
 
-- Use **`authenticate`** for routes that require a logged-in user; use **`optionalAuth`** when the route works for both anonymous and authenticated users, then **`requireAuth`** in the handler when you need to enforce auth. See [AUTH.md](./AUTH.md).
-- Type protected handlers with **`AuthenticatedRequest`** from `src/middleware/auth.ts` so `request.user` is typed.
+- Use **`authenticate`** for routes that require a logged-in user and read it with **`getAuthUser(request)`**. Use **`optionalAuth`** when anonymous is allowed (`request.user` is `AuthUser | null`). See [AUTH.md](./AUTH.md).
+- **Never** use `user.metadata` (Supabase `user_metadata`) for identity or authorization – users can edit it.
 - Do not store secrets or tokens in code; use `env` from `src/config/env.ts`.
+
+---
+
+## Tests
+
+- Every new route needs a test in `test/` (happy path + main error cases). Use `useTestApp()` and `app().inject()`.
+- Run `pnpm type-check && pnpm test` before committing.
 
 ---
 

@@ -5,10 +5,11 @@ alwaysApply: true
 
 # Fastify Backend Boilerplate
 
-- **Stack:** Fastify, TypeScript, Drizzle ORM, Zod, Supabase (JWT), Pino. Entry: `src/index.ts` (wiring only; no business logic).
-- **Features:** Add under `src/modules/<name>/` with `routes.ts`, `handler.ts`, `service.ts`, `schema.ts`, `docs.ts`. Use `src/modules/health/` as reference.
-- **New route:** Register in module’s `routes.ts`; in `src/index.ts` import and `fastify.register(moduleRoutes, { prefix: "/api" })`. Add Swagger tags in `src/config/swagger.ts` if new.
+- **Stack:** Fastify, TypeScript, Drizzle ORM, Zod, Supabase (JWT), Pino. Entry: `src/index.ts` starts `buildApp()` from `src/app.ts` (wiring only; no business logic).
+- **Features:** Add under `src/modules/<name>/` with `routes.ts`, `handler.ts`, `service.ts`, `schema.ts`, `docs.ts`. Use `src/modules/health/` (public) and `src/modules/auth/` (protected) as reference.
+- **New route:** Register in module’s `routes.ts`; in `src/app.ts` import and `app.register(moduleRoutes, { prefix: "/api" })`. Add a test in `test/`. Add Swagger tags in `src/config/swagger.ts` if new.
 - **DB:** All schema in `src/db/schema.ts`. After changes: `pnpm db:generate` then `pnpm db:push` or `pnpm db:migrate`.
-- **Auth:** Use `authenticate` for protected routes; `optionalAuth` + `requireAuth` when both guest and logged-in. Type handlers with `AuthenticatedRequest`. See AUTH.md.
-- **Validation:** Zod on routes; no ad-hoc validation in handlers. Use global error handler for consistent error JSON.
+- **Auth:** Use `authenticate` for protected routes; `optionalAuth` + `requireAuth` when both guest and logged-in. Read user via `getAuthUser(request)`; `request.user` is typed globally. Never trust `user.metadata` for authorization. See AUTH.md.
+- **Validation:** Zod on routes; no ad-hoc validation in handlers. Throw `HttpError` from `src/lib/errors.ts`; global handler formats errors.
+- **Verify:** `pnpm type-check && pnpm test` before finishing.
 - **Docs:** Read AGENT.md for full workflow, RULE.md for conventions, AUTH.md for auth details.

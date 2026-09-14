@@ -7,7 +7,7 @@ How auth works in this boilerplate and how to protect routes or extend it (e.g. 
 ## Overview
 
 - **Provider:** Supabase. JWTs are issued by Supabase Auth; the backend only verifies them.
-- **Flow:** Client sends `Authorization: Bearer <access_token>`. Backend uses Supabase Admin client to validate the token and optionally attach user to the request.
+- **Flow:** Client sends `Authorization: Bearer <access_token>`. Backend uses the Supabase Admin client to validate the token and attaches the user to `request.user`.
 - **No session store:** This app does not store sessions server-side. Session lifetime is controlled by Supabase (JWT expiry, refresh tokens). Env `SESSION_DURATION_DAYS` is for documentation only; configure expiry in the Supabase Dashboard.
 
 ---
@@ -15,7 +15,7 @@ How auth works in this boilerplate and how to protect routes or extend it (e.g. 
 ## Config
 
 - **`src/config/supabase.ts`**
-  - **`supabaseClient`** – anon key; use for client-side or public Supabase calls.
+  - **`supabaseClient`** – anon key; use for public Supabase calls.
   - **`supabaseAdmin`** – service role key; used in middleware to call `getUser(token)` and validate JWTs. Never expose this key to the client.
 
 - **Env (see `.env.example`):**
@@ -24,30 +24,43 @@ How auth works in this boilerplate and how to protect routes or extend it (e.g. 
 
 ---
 
+## The `request.user` type
+
+`src/middleware/auth.ts` augments Fastify's request type, so every handler sees:
+
+```ts
+request.user: AuthUser | null
+
+interface AuthUser {
+  id: string;
+  email: string | null;
+  metadata: Record<string, unknown>; // Supabase user_metadata
+}
+```
+
+`request.user` is `null` until `authenticate` or `optionalAuth` sets it. No casts or custom request types are needed.
+
+> **Security:** `metadata` is Supabase `user_metadata`, which **users can edit themselves** from the client (`supabase.auth.updateUser({ data })`). Never use it for identity, roles, ownership, or any authorization decision. Use `id`, Supabase `app_metadata`, or your own DB tables instead.
+
+---
+
 ## Middleware
 
 ### `src/middleware/auth.ts`
 
-- **`authenticate`**  
-  - Reads `Authorization: Bearer <token>`.  
-  - Calls `supabaseAdmin.auth.getUser(token)`.  
-  - On success: sets `request.user` with `{ id, email, ...user_metadata }` and continues.  
-  - On missing/invalid token: sends 401 and does not call the route handler.
+- **`authenticate`** (preHandler)
+  - Reads `Authorization: Bearer <token>` and calls `supabaseAdmin.auth.getUser(token)`.
+  - On success: sets `request.user`.
+  - On missing/invalid token: throws `HttpError(401)`; the handler never runs.
+  - If Supabase is unreachable, the error goes to the global handler (500, details hidden).
 
-- **`optionalAuth`**  
-  - Same lookup, but if there is no token or it’s invalid, does **not** send 401; it just leaves `request.user` unset.  
-  - Use when a route serves both anonymous and authenticated users.
-
-- **`AuthenticatedRequest`**  
-  - Type that extends Fastify’s request with `user?: { id: string; email?: string; [key: string]: unknown }`.  
-  - Use this type for handlers that run after `authenticate` or `optionalAuth` when you expect `user` to possibly be set.
+- **`optionalAuth`** (preHandler)
+  - Same lookup, but never fails the request. Invalid/missing token or a Supabase error leaves `request.user` as `null`.
 
 ### `src/middleware/authorize.ts`
 
-- **`requireAuth`**  
-  - Assumes `optionalAuth` (or similar) has run.  
-  - If `request.user` is not set, sends 401 and stops.  
-  - Use when the route must have a logged-in user but you still want to use `optionalAuth` for flexibility (e.g. logging).
+- **`getAuthUser(request)`** – returns `AuthUser` (non-null) or throws 401. Use in handlers to get a typed user.
+- **`requireAuth`** (preHandler) – responds 401 when `request.user` is `null`. Use after `optionalAuth`.
 
 ---
 
@@ -55,59 +68,55 @@ How auth works in this boilerplate and how to protect routes or extend it (e.g. 
 
 ### Route requires a logged-in user
 
-Use **`authenticate`** as a preHandler so only valid JWTs reach the handler:
-
 ```ts
+import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { authenticate } from "../../middleware/auth";
-import type { AuthenticatedRequest } from "../../middleware/auth";
+import { getAuthUser } from "../../middleware/authorize";
 
-fastify.withTypeProvider<ZodTypeProvider>().route({
-  method: "GET",
-  url: "/me",
-  preHandler: [authenticate],
-  schema: { /* ... */ },
-  handler: async (request: AuthenticatedRequest, reply) => {
-    // request.user is set
-    return reply.send({ user: request.user });
-  },
-});
+const routes: FastifyPluginAsyncZod = async (fastify) => {
+  fastify.route({
+    method: "GET",
+    url: "/me",
+    preHandler: [authenticate],
+    schema: MeSchema,
+    handler: async (request) => {
+      const user = getAuthUser(request); // AuthUser, never null
+      return { id: user.id, email: user.email };
+    },
+  });
+};
 ```
+
+See `src/modules/auth/` for the full module version (`GET /api/auth/me`).
 
 ### Route works for both guest and logged-in users
 
-Use **`optionalAuth`** so `request.user` is set when a valid token is sent, then in the handler use **`requireAuth`** only when the action requires a user:
-
 ```ts
-import { optionalAuth } from "../../middleware/auth";
-import { requireAuth } from "../../middleware/authorize";
-import type { AuthenticatedRequest } from "../../middleware/auth";
-
-fastify.withTypeProvider<ZodTypeProvider>().route({
-  method: "POST",
-  url: "/favorite",
+fastify.route({
+  method: "GET",
+  url: "/posts",
   preHandler: [optionalAuth],
-  schema: { /* ... */ },
-  handler: async (request: AuthenticatedRequest, reply) => {
-    await requireAuth(request, reply);
-    if (reply.sent) return; // 401 already sent
-    // request.user is set here
-    // ...
+  schema: ListPostsSchema,
+  handler: async (request) => {
+    // request.user is AuthUser | null
+    return postService.list({ viewerId: request.user?.id ?? null });
   },
 });
 ```
 
-Alternatively, use **`authenticate`** on routes that always require auth and **`optionalAuth`** only where you truly need both behaviors.
+To require a user on such a route, add `requireAuth` after `optionalAuth`, or call `getAuthUser(request)` only in the branch that needs it.
 
 ---
 
 ## Response shape on auth errors
 
-The global error handler in `src/index.ts` sends a consistent JSON body. Middleware sends 401 with:
+Middleware throws `HttpError`; the global error handler (`src/lib/errors.ts`) sends:
 
-- `error: "Unauthorized"`
-- `message`: short reason (e.g. "Missing or invalid authorization header", "Invalid or expired token", "Authentication required")
+```json
+{ "error": "Unauthorized", "message": "Invalid or expired token" }
+```
 
-Clients should rely on HTTP status and these fields; do not add new ad-hoc auth response shapes without updating this doc and the global handler if needed.
+Messages: `"Missing or invalid authorization header"`, `"Invalid or expired token"`, `"Authentication required"`. Use `ErrorResponseSchema` in route `response` schemas (e.g. `401: ErrorResponseSchema`) so Swagger documents it.
 
 ---
 
@@ -115,12 +124,11 @@ Clients should rely on HTTP status and these fields; do not add new ad-hoc auth 
 
 This boilerplate does **not** include roles or permissions. To add them:
 
-1. **Store roles** – e.g. a `user_roles` table or a `role` column on a `users` table, populated by your app or by Supabase hooks.
-2. **Load roles in auth** – After validating the JWT in `authenticate` (and optionally in `optionalAuth`), fetch the user’s roles from the DB and attach them to `request.user` (e.g. `request.user.roles`).
-3. **Authorization helpers** – In `src/middleware/authorize.ts` (or a new file), add helpers like `requireRole('admin')` or `requireAnyRole(['admin', 'editor'])` that check `request.user.roles` and send 403 if the user does not have the required role.
-4. **Typing** – Extend `AuthenticatedRequest` so `user` includes `roles` (e.g. `roles: string[]`).
+1. **Store roles** – a `user_roles` table, a `role` column on `users`, or Supabase `app_metadata` (not user-editable). **Never** `user_metadata`.
+2. **Load roles in auth** – after validating the JWT in `authenticate`, fetch roles and add them to `AuthUser` (e.g. `roles: string[]`).
+3. **Authorization helpers** – in `src/middleware/authorize.ts`, add e.g. `requireRole("admin")` that throws `new HttpError(403, "Forbidden")`.
 
-Keep JWT validation in one place (middleware) and role/permission checks in authorize helpers or inside handlers when logic is complex.
+Keep JWT validation in one place (middleware) and role/permission checks in authorize helpers.
 
 ---
 
@@ -128,8 +136,9 @@ Keep JWT validation in one place (middleware) and role/permission checks in auth
 
 | Need | Middleware / helper |
 |------|----------------------|
-| Only logged-in users | `preHandler: [authenticate]`, type handler with `AuthenticatedRequest` |
-| Optional user, then require in handler | `preHandler: [optionalAuth]`, then `requireAuth(request, reply)` in handler |
-| Roles/permissions | Add your own tables and helpers; load roles after auth and check in authorize middleware or in handler |
+| Only logged-in users | `preHandler: [authenticate]`, then `getAuthUser(request)` |
+| Optional user | `preHandler: [optionalAuth]`, read `request.user` (nullable) |
+| Optional auth, but this route requires it | `preHandler: [optionalAuth, requireAuth]` |
+| Roles/permissions | Add tables + helpers that throw `HttpError(403)` |
 
-See **`src/middleware/auth.ts`** and **`src/middleware/authorize.ts`** for the current implementation.
+Tests covering all of the above: `test/auth.test.ts`, `test/middleware.test.ts`.

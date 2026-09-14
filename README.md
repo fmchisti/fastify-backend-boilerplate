@@ -21,6 +21,7 @@ pnpm dev
 
 - **Root:** `GET /` – API info  
 - **Health:** `GET /api/health` – health check  
+- **Me:** `GET /api/auth/me` – current user (Bearer token)  
 - **Docs:** `GET /api/docs` – Swagger UI (optional Basic auth via `DOCS_USERNAME` / `DOCS_PASSWORD`)  
 
 ## Scripts
@@ -31,6 +32,8 @@ pnpm dev
 | `pnpm build`   | Compile to `dist/`         |
 | `pnpm start`   | Run production build       |
 | `pnpm type-check` | TypeScript check        |
+| `pnpm test`    | Run tests (Vitest)         |
+| `pnpm test:watch` | Tests in watch mode     |
 | `pnpm db:generate` | Generate Drizzle migrations |
 | `pnpm db:push` | Push schema to DB          |
 | `pnpm db:studio` | Drizzle Studio UI        |
@@ -39,9 +42,12 @@ pnpm dev
 
 - `src/config/` – env, database, logger, Supabase, Swagger  
 - `src/db/` – Drizzle schema (edit `schema.ts`, then `db:generate` / `db:push`)  
-- `src/middleware/` – `authenticate`, `optionalAuth`, `requireAuth`  
+- `src/app.ts` – `buildApp()` (plugins, error handlers, routes); `src/index.ts` starts it  
+- `src/lib/` – `HttpError`, error handlers, basic-auth helper  
+- `src/middleware/` – `authenticate`, `optionalAuth`, `requireAuth`, `getAuthUser`  
 - `src/modules/` – feature modules (e.g. `health`); add new ones here (routes, handler, service, schema, docs)
-- `src/types/` – shared types
+- `src/types/` – shared types (`ZodRouteHandler`)
+- `test/` – Vitest tests; no real DB or Supabase needed
 
 See **[BACKEND_SETUP_GUIDE.md](./BACKEND_SETUP_GUIDE.md)** for full setup, env vars, and deployment.
 
